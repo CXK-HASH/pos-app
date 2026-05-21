@@ -13,12 +13,17 @@ function getSupabase() {
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const merchantId = searchParams.get('merchant_id')
+  const dishCategoryId = searchParams.get('dish_category_id')
 
   const supabase = getSupabase()
   let query = supabase.from('dishes').select('*')
 
   if (merchantId) {
     query = query.eq('merchant_id', Number(merchantId))
+  }
+
+  if (dishCategoryId) {
+    query = query.eq('dish_category_id', Number(dishCategoryId))
   }
 
   const { data, error } = await query.order('id', { ascending: true })

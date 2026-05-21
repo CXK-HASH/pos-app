@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
-import { createClient } from '@supabase/supabase-js'
 
 type Dish = {
   id: number
@@ -11,6 +10,12 @@ type Dish = {
   price: number
   image_url: string | null
   merchant_id: number
+  dish_category_id: number | null
+}
+
+type DishCategory = {
+  id: number
+  name: string
 }
 
 type Merchant = {
@@ -20,31 +25,51 @@ type Merchant = {
   rating: number
 }
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
-
 export default function MerchantPage() {
   const params = useParams()
   const merchantId = Number(params.id)
 
   const [merchant, setMerchant] = useState<Merchant | null>(null)
   const [dishes, setDishes] = useState<Dish[]>([])
+  const [categories, setCategories] = useState<DishCategory[]>([])
+  const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null)
   const [cart, setCart] = useState<Record<number, number>>({})
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
+  // 获取商家信息和菜品分类列表
   useEffect(() => {
     Promise.all([
-      supabase.from('merchants').select('*').eq('id', merchantId).single(),
-      supabase.from('dishes').select('*').eq('merchant_id', merchantId).order('id', { ascending: true }),
-    ]).then(([merchantRes, dishesRes]) => {
-      if (!merchantRes.error && merchantRes.data) setMerchant(merchantRes.data)
-      if (!dishesRes.error && dishesRes.data) setDishes(dishesRes.data)
-      setIsLoading(false)
+      fetch('/api/merchants').then(r => r.json()),
+      fetch('/api/dish-categories').then(r => r.json()),
+    ]).then(([merchants, cats]) => {
+      const m = merchants.find((m: Merchant) => m.id === merchantId)
+      setMerchant(m || null)
+      setCategories(cats)
     })
   }, [merchantId])
+
+  // 根据 merchant_id 和 selectedCategoryId 获取菜品
+  const loadDishes = useCallback(async (categoryId: number | null) => {
+    const params = new URLSearchParams()
+    params.set('merchant_id', String(merchantId))
+    if (categoryId !== null) {
+      params.set('dish_category_id', String(categoryId))
+    }
+    const res = await fetch(`/api/dishes?${params}`)
+    const data = await res.json()
+    setDishes(data)
+    setIsLoading(false)
+  }, [merchantId])
+
+  useEffect(() => {
+    setIsLoading(true)
+    loadDishes(selectedCategoryId)
+  }, [selectedCategoryId, loadDishes])
+
+  const handleCategoryClick = (categoryId: number) => {
+    setSelectedCategoryId(prev => prev === categoryId ? null : categoryId)
+  }
 
   const addToCart = useCallback((dishId: number) => {
     setCart(prev => ({ ...prev, [dishId]: (prev[dishId] || 0) + 1 }))
@@ -92,10 +117,10 @@ export default function MerchantPage() {
     }
   }
 
-  if (isLoading) {
+  if (!merchant && !isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <p className="text-gray-400">加载中...</p>
+        <p className="text-gray-400">商家不存在</p>
       </div>
     )
   }
@@ -119,10 +144,33 @@ export default function MerchantPage() {
       </header>
 
       <div className="max-w-6xl mx-auto px-6 py-6 flex gap-6">
-        {/* ======== 左侧：菜品列表 ======== */}
+        {/* ======== 左侧 ======== */}
         <div className="w-[70%]">
-          {dishes.length === 0 ? (
-            <div className="text-center py-20 text-gray-400">该商家暂无菜品</div>
+          {/* 分类筛选按钮 */}
+          <div className="flex gap-2 mb-4 flex-wrap">
+            {categories.map(cat => (
+              <button
+                key={cat.id}
+                onClick={() => handleCategoryClick(cat.id)}
+                className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                  selectedCategoryId === cat.id
+                    ? 'bg-orange-500 text-white shadow-sm'
+                    : 'bg-white text-gray-600 border border-gray-200 hover:border-orange-300 hover:text-orange-600'
+                }`}
+              >
+                {cat.name}
+              </button>
+            ))}
+          </div>
+
+          {/* 菜品列表 */}
+          {isLoading ? (
+            <div className="text-center py-20 text-gray-400">加载中...</div>
+          ) : dishes.length === 0 ? (
+            <div className="text-center py-20">
+              <div className="text-4xl mb-3">🔍</div>
+              <p className="text-gray-400">暂无相关菜品</p>
+            </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {dishes.map(dish => {
