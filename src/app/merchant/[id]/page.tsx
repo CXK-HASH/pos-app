@@ -162,20 +162,20 @@ export default function MerchantPage() {
       <div className="max-w-6xl mx-auto px-6 py-6 flex gap-6">
         {/* ===== 左侧：AI 智能点餐 + 分类导航（22%） ===== */}
         <div className="hidden md:block w-[22%] flex-shrink-0 space-y-3">
-          {/* AI 智能点餐 */}
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-            <div className="flex items-center gap-1.5 mb-2">
-              <span className="text-sm">🤖</span>
-              <span className="text-sm font-semibold text-gray-800">AI 智能点餐</span>
+          {/* AI 智能点餐卡片 */}
+          <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+            <div className="flex items-center gap-1.5 mb-3">
+              <span className="text-base">🤖</span>
+              <span className="text-sm font-bold text-gray-800">AI 智能点餐</span>
             </div>
-            <div className="flex gap-2">
+            <div className="flex items-center gap-2 w-full">
               <input
                 type="text"
                 value={aiPrompt}
                 onChange={e => setAiPrompt(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter') document.getElementById('ai-btn')?.click() }}
                 placeholder="想吃点什么？大白话告诉 DeepSeek..."
-                className="flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-transparent transition-all"
+                className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:border-orange-500 focus:bg-white transition-all min-w-0"
               />
               <button
                 id="ai-btn"
@@ -191,11 +191,8 @@ export default function MerchantPage() {
                     })
                     const data = await res.json()
                     if (data.tags && data.tags.length > 0) {
-                      // 找到匹配的分类 ID 并自动切换
                       const matched = categories.find(c => data.tags.includes(c.name))
-                      if (matched) {
-                        setSelectedCategoryId(matched.id)
-                      }
+                      if (matched) setSelectedCategoryId(matched.id)
                       setAiResult(data.analysis || `为您找到了【${data.tags.join('、')}】相关菜品`)
                     } else {
                       setAiResult(null)
@@ -208,26 +205,22 @@ export default function MerchantPage() {
                   }
                 }}
                 disabled={aiLoading}
-                className="shrink-0 px-3 py-2 bg-gradient-to-r from-orange-500 to-amber-500 text-white text-sm font-medium rounded-xl hover:from-orange-600 hover:to-amber-600 disabled:opacity-50 transition-all active:scale-95"
+                className="flex-shrink-0 bg-gradient-to-r from-orange-500 to-amber-500 text-white text-sm font-medium px-4 py-2.5 rounded-xl shadow-sm hover:opacity-90 active:scale-95 transition-all whitespace-nowrap"
               >
                 {aiLoading ? (
-                  <span className="flex items-center gap-1">
-                    <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-                    分析中
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                    <span>分析中</span>
                   </span>
                 ) : '智能分析'}
               </button>
             </div>
             {aiResult && (
-              <div className="flex items-center justify-between mt-2 px-1">
+              <div className="flex items-center justify-between mt-2.5 px-1">
                 <p className="text-xs text-orange-600">🤖 {aiResult}</p>
                 <button
-                  onClick={() => {
-                    setAiResult(null)
-                    setAiPrompt('')
-                    setSelectedCategoryId(null)
-                  }}
-                  className="text-xs text-gray-400 hover:text-gray-600 shrink-0 ml-2"
+                  onClick={() => { setAiResult(null); setAiPrompt(''); setSelectedCategoryId(null) }}
+                  className="text-xs text-gray-400 hover:text-gray-600 whitespace-nowrap shrink-0 ml-2"
                 >
                   重置
                 </button>
@@ -235,26 +228,28 @@ export default function MerchantPage() {
             )}
           </div>
 
-          {/* 分类导航 */}
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-3 sticky top-6 space-y-1">
-            <p className="text-xs font-medium text-gray-400 px-3 py-2 uppercase tracking-wider">分类</p>
-            {categories.map(cat => {
-              const isActive = selectedCategoryId === cat.id
-              return (
-                <button
-                  key={cat.id}
-                  onClick={() => handleCategoryClick(cat.id)}
-                  className={`w-full text-left px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
-                    isActive
-                      ? 'bg-orange-50 text-orange-600 font-semibold'
-                      : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'
-                  }`}
-                >
-                  {cat.name}
-                  {isActive && <span className="float-right text-orange-400">●</span>}
-                </button>
-              )
-            })}
+          {/* 分类导航（胶囊卡片） */}
+          <div className="bg-white rounded-2xl p-3 shadow-sm border border-gray-100 sticky top-6">
+            <p className="text-xs font-semibold text-gray-400 px-3 py-2.5 uppercase tracking-wider">全部分类</p>
+            <div className="space-y-1.5">
+              {categories.map(cat => {
+                const isActive = selectedCategoryId === cat.id
+                return (
+                  <button
+                    key={cat.id}
+                    onClick={() => handleCategoryClick(cat.id)}
+                    className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all flex items-center justify-between ${
+                      isActive
+                        ? 'bg-orange-50 text-orange-600 font-bold shadow-sm border border-orange-100'
+                        : 'bg-transparent text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    <span>{cat.name}</span>
+                    {isActive && <span className="text-orange-400 text-lg leading-none">›</span>}
+                  </button>
+                )
+              })}
+            </div>
           </div>
         </div>
 
