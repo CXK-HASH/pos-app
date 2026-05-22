@@ -25,9 +25,9 @@ export default function AdminDashboard() {
   const [editPrice, setEditPrice] = useState('')
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
-  const sessionHeaders = async () => {
+  const sessionHeaders = async (): Promise<Record<string, string>> => {
     const { data: { session } } = await supabase.auth.getSession()
-    if (!session) return null
+    if (!session) throw new Error('未登录')
     return { 'Authorization': `Bearer ${session.access_token}`, 'Content-Type': 'application/json' }
   }
 
@@ -46,9 +46,9 @@ export default function AdminDashboard() {
       setUser({ id: session.user.id, email: session.user.email || '' })
 
       // 获取绑定的店铺 + 分类
-      const headers = await sessionHeaders()
+      const hdrs = await sessionHeaders()
       const [merchantRes, catRes] = await Promise.all([
-        fetch('/api/admin/merchant-info', { headers }),
+        fetch('/api/admin/merchant-info', { headers: hdrs }),
         fetch('/api/dish-categories'),
       ])
 
@@ -60,7 +60,7 @@ export default function AdminDashboard() {
       if (merchantData?.merchant) {
         setMerchant(merchantData.merchant)
         // 自动加载菜品
-        const dishRes = await fetch(`/api/admin/dishes?merchant_id=${merchantData.merchant.id}`, { headers })
+        const dishRes = await fetch(`/api/admin/dishes?merchant_id=${merchantData.merchant.id}`, { headers: hdrs })
         const dishData = await dishRes.json()
         setDishes(Array.isArray(dishData) ? dishData : [])
       }
