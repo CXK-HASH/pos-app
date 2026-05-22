@@ -1,14 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
-function getSupabase() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } }
-  )
-}
-
 export async function POST(request: Request) {
   try {
     const body = await request.json()
@@ -22,7 +14,26 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: '金额无效' }, { status: 400 })
     }
 
-    const supabase = getSupabase()
+    // 从 Authorization header 解析当前用户
+    const authHeader = request.headers.get('Authorization')
+    let userId: string | null = null
+
+    if (authHeader?.startsWith('Bearer ')) {
+      const token = authHeader.slice(7)
+      const supabaseAdmin = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY!,
+        { auth: { autoRefreshToken: false, persistSession: false } }
+      )
+      const { data: { user } } = await supabaseAdmin.auth.getUser(token)
+      userId = user?.id ?? null
+    }
+
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY!,
+      { auth: { autoRefreshToken: false, persistSession: false } }
+    )
 
     const { data, error } = await supabase
       .from('orders')
@@ -31,6 +42,7 @@ export async function POST(request: Request) {
         items: cart,
         status: 'pending',
         merchant_id: merchantId || null,
+        user_id: userId,
       }])
       .select()
 

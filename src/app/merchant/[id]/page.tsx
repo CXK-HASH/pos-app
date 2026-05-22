@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@supabase/supabase-js'
 
@@ -35,6 +35,7 @@ const CARD_EMOJI = ['🍱', '🥩', '🍗', '🥘', '🍜', '🍛', '🫘', '�
 
 export default function MerchantPage() {
   const params = useParams()
+  const router = useRouter()
   const merchantId = Number(params.id)
 
   const [merchant, setMerchant] = useState<Merchant | null>(null)
@@ -103,6 +104,14 @@ export default function MerchantPage() {
   }, 0)
 
   const handleCheckout = async () => {
+    // 登录拦截
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) {
+      alert('请先登录后再下单！')
+      setTimeout(() => router.push('/login'), 1500)
+      return
+    }
+
     const items = Object.entries(cart).map(([id, qty]) => {
       const dish = dishes.find(d => d.id === Number(id))
       return { id: Number(id), name: dish?.name, price: dish?.price, quantity: qty }
@@ -112,7 +121,10 @@ export default function MerchantPage() {
     try {
       const res = await fetch('/api/checkout', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + session.access_token,
+        },
         body: JSON.stringify({ cart: items, totalPrice, merchantId }),
       })
       const data = await res.json()
