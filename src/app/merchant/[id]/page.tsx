@@ -3,6 +3,12 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
+import { createClient } from '@supabase/supabase-js'
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+)
 
 type Dish = {
   id: number
@@ -39,6 +45,9 @@ export default function MerchantPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [showCartMobile, setShowCartMobile] = useState(false)
+  const [aiPrompt, setAiPrompt] = useState('')
+  const [aiLoading, setAiLoading] = useState(false)
+  const [aiResult, setAiResult] = useState<string | null>(null)
 
   // 获取商家信息和菜品分类列表
   useEffect(() => {
@@ -151,8 +160,82 @@ export default function MerchantPage() {
 
       {/* ========== 主内容区：双栏布局 ========== */}
       <div className="max-w-6xl mx-auto px-6 py-6 flex gap-6">
-        {/* ===== 左侧：垂直分类导航（20%） ===== */}
-        <div className="hidden md:block w-[22%] flex-shrink-0">
+        {/* ===== 左侧：AI 智能点餐 + 分类导航（22%） ===== */}
+        <div className="hidden md:block w-[22%] flex-shrink-0 space-y-3">
+          {/* AI 智能点餐 */}
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+            <div className="flex items-center gap-1.5 mb-2">
+              <span className="text-sm">🤖</span>
+              <span className="text-sm font-semibold text-gray-800">AI 智能点餐</span>
+            </div>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={aiPrompt}
+                onChange={e => setAiPrompt(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') document.getElementById('ai-btn')?.click() }}
+                placeholder="想吃点什么？大白话告诉 DeepSeek..."
+                className="flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-transparent transition-all"
+              />
+              <button
+                id="ai-btn"
+                onClick={async () => {
+                  if (!aiPrompt.trim() || aiLoading) return
+                  setAiLoading(true)
+                  setAiResult(null)
+                  try {
+                    const res = await fetch('/api/ai-classify', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ text: aiPrompt.trim() }),
+                    })
+                    const data = await res.json()
+                    if (data.tags && data.tags.length > 0) {
+                      // 找到匹配的分类 ID 并自动切换
+                      const matched = categories.find(c => data.tags.includes(c.name))
+                      if (matched) {
+                        setSelectedCategoryId(matched.id)
+                      }
+                      setAiResult(data.analysis || `为您找到了【${data.tags.join('、')}】相关菜品`)
+                    } else {
+                      setAiResult(null)
+                      alert('🤖 AI 暂时无法分析，请手动选择分类')
+                    }
+                  } catch {
+                    alert('🤖 网络异常，请稍后重试')
+                  } finally {
+                    setAiLoading(false)
+                  }
+                }}
+                disabled={aiLoading}
+                className="shrink-0 px-3 py-2 bg-gradient-to-r from-orange-500 to-amber-500 text-white text-sm font-medium rounded-xl hover:from-orange-600 hover:to-amber-600 disabled:opacity-50 transition-all active:scale-95"
+              >
+                {aiLoading ? (
+                  <span className="flex items-center gap-1">
+                    <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                    分析中
+                  </span>
+                ) : '智能分析'}
+              </button>
+            </div>
+            {aiResult && (
+              <div className="flex items-center justify-between mt-2 px-1">
+                <p className="text-xs text-orange-600">🤖 {aiResult}</p>
+                <button
+                  onClick={() => {
+                    setAiResult(null)
+                    setAiPrompt('')
+                    setSelectedCategoryId(null)
+                  }}
+                  className="text-xs text-gray-400 hover:text-gray-600 shrink-0 ml-2"
+                >
+                  重置
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* 分类导航 */}
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-3 sticky top-6 space-y-1">
             <p className="text-xs font-medium text-gray-400 px-3 py-2 uppercase tracking-wider">分类</p>
             {categories.map(cat => {
@@ -177,7 +260,63 @@ export default function MerchantPage() {
 
         {/* ===== 右侧：菜品流（80%） ===== */}
         <div className="flex-1 min-w-0">
-          {/* 移动端分类胶囊（<md 时显示） */}
+          {/* 移动端：AI 智能点餐 */}
+          <div className="md:hidden mb-3">
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={aiPrompt}
+                onChange={e => setAiPrompt(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') document.getElementById('ai-btn-mobile')?.click() }}
+                placeholder="AI 帮点，说句话试试..."
+                className="flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-300 transition-all"
+              />
+              <button
+                id="ai-btn-mobile"
+                onClick={async () => {
+                  if (!aiPrompt.trim() || aiLoading) return
+                  setAiLoading(true)
+                  setAiResult(null)
+                  try {
+                    const res = await fetch('/api/ai-classify', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ text: aiPrompt.trim() }),
+                    })
+                    const data = await res.json()
+                    if (data.tags && data.tags.length > 0) {
+                      const matched = categories.find(c => data.tags.includes(c.name))
+                      if (matched) setSelectedCategoryId(matched.id)
+                      setAiResult(data.analysis || `为您找到了【${data.tags.join('、')}】相关菜品`)
+                    } else {
+                      setAiResult(null)
+                      alert('🤖 AI 暂时无法分析，请手动选择分类')
+                    }
+                  } catch {
+                    alert('🤖 网络异常，请稍后重试')
+                  } finally {
+                    setAiLoading(false)
+                  }
+                }}
+                disabled={aiLoading}
+                className="shrink-0 px-3 py-2 bg-gradient-to-r from-orange-500 to-amber-500 text-white text-sm font-medium rounded-xl disabled:opacity-50 transition-all"
+              >
+                {aiLoading ? (
+                  <span className="flex items-center gap-1">
+                    <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                  </span>
+                ) : 'AI'}
+              </button>
+            </div>
+            {aiResult && (
+              <div className="flex items-center justify-between mt-2 px-1">
+                <p className="text-xs text-orange-600">🤖 {aiResult}</p>
+                <button onClick={() => { setAiResult(null); setAiPrompt(''); setSelectedCategoryId(null) }} className="text-xs text-gray-400 hover:text-gray-600 shrink-0 ml-2">重置</button>
+              </div>
+            )}
+          </div>
+
+          {/* 移动端分类胶囊 */}
           <div className="flex md:hidden gap-2 mb-4 overflow-x-auto pb-2 scrollbar-hide -mx-1 px-1">
             {categories.map(cat => (
               <button
