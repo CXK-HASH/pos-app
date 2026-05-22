@@ -112,6 +112,13 @@ export default function MerchantPage() {
       return
     }
 
+    // 商家身份无法下单
+    const role = session.user?.user_metadata?.role
+    if (role === 'merchant') {
+      alert('您的身份是商家，无法进行前台下单，请更换消费者账号！')
+      return
+    }
+
     const items = Object.entries(cart).map(([id, qty]) => {
       const dish = dishes.find(d => d.id === Number(id))
       return { id: Number(id), name: dish?.name, price: dish?.price, quantity: qty }
