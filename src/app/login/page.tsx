@@ -9,6 +9,7 @@ export default function LoginPage() {
   const [isSignUp, setIsSignUp] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [role, setRole] = useState<'customer' | 'merchant'>('customer')
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState<{ type: 'error' | 'success'; text: string } | null>(null)
 
@@ -23,7 +24,7 @@ export default function LoginPage() {
         const res = await fetch('/api/auth/signup', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password }),
+          body: JSON.stringify({ email, password, role }),
         })
         const data = await res.json()
 
@@ -90,13 +91,13 @@ export default function LoginPage() {
           </div>
 
           {isSignUp && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">身份</label>
-              <div className="flex gap-3">
-                <label className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border-2 cursor-pointer transition-all text-sm ${
+            <div className="mb-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2">选择您的身份</label>
+              <div className="grid grid-cols-2 gap-3">
+                <label className={`flex items-center justify-center p-3 rounded-xl border-2 cursor-pointer transition-all ${
                   role === 'customer'
-                    ? 'border-orange-500 bg-orange-50 text-orange-700 font-medium'
-                    : 'border-gray-200 bg-gray-50 text-gray-500'
+                    ? 'border-orange-500 bg-orange-50 text-orange-600 font-bold'
+                    : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
                 }`}>
                   <input
                     type="radio"
@@ -104,14 +105,14 @@ export default function LoginPage() {
                     value="customer"
                     checked={role === 'customer'}
                     onChange={() => setRole('customer')}
-                    className="hidden"
+                    className="sr-only"
                   />
-                  🛒 消费者
+                  <span>🛒 消费者</span>
                 </label>
-                <label className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border-2 cursor-pointer transition-all text-sm ${
+                <label className={`flex items-center justify-center p-3 rounded-xl border-2 cursor-pointer transition-all ${
                   role === 'merchant'
-                    ? 'border-orange-500 bg-orange-50 text-orange-700 font-medium'
-                    : 'border-gray-200 bg-gray-50 text-gray-500'
+                    ? 'border-orange-500 bg-orange-50 text-orange-600 font-bold'
+                    : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
                 }`}>
                   <input
                     type="radio"
@@ -119,9 +120,9 @@ export default function LoginPage() {
                     value="merchant"
                     checked={role === 'merchant'}
                     onChange={() => setRole('merchant')}
-                    className="hidden"
+                    className="sr-only"
                   />
-                  🏪 商家
+                  <span>🏪 商家</span>
                 </label>
               </div>
             </div>
