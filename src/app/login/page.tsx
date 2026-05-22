@@ -18,13 +18,30 @@ export default function LoginPage() {
     setMessage(null)
 
     try {
-      let result
       if (isSignUp) {
-        result = await supabase.auth.signUp({ email, password })
-        if (result.error) throw result.error
-        setMessage({ type: 'success', text: '注册成功！请查看邮箱确认链接，或直接尝试登录。' })
+        // 走后端接口，利用 Service Role Key 免验证创建用户
+        const res = await fetch('/api/auth/signup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password }),
+        })
+        const data = await res.json()
+
+        if (!data.success) {
+          throw new Error(data.error || '注册失败')
+        }
+
+        // 注册成功后自动登录
+        const { error: loginErr } = await supabase.auth.signInWithPassword({ email, password })
+        if (loginErr) throw loginErr
+
+        setMessage({ type: 'success', text: '🎉 账号注册并自动激活成功！' })
+        setTimeout(() => {
+          router.push('/')
+          router.refresh()
+        }, 1500)
       } else {
-        result = await supabase.auth.signInWithPassword({ email, password })
+        const result = await supabase.auth.signInWithPassword({ email, password })
         if (result.error) throw result.error
         router.push('/')
         router.refresh()
