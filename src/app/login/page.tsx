@@ -95,6 +95,13 @@ export default function LoginPage() {
               {isSignUp ? '已有账号？去登录' : '没有账号？去注册'}
             </button>
           </div>
+
+          <div className="pt-2 border-t border-gray-50 mt-2">
+            <p className="text-xs text-gray-400 text-center leading-relaxed">
+              💡 若注册提示邮件超限，请直接使用测试账号登录：<br />
+              账号 <span className="text-gray-500">test1234@qq.com</span> 密码 <span className="text-gray-500">123456</span>
+            </p>
+          </div>
         </form>
       </div>
     </div>
