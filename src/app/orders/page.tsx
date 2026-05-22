@@ -54,31 +54,27 @@ export default function OrdersPage() {
 
     loadMerchants()
 
-    // 实时订阅（监听 all 变更，payload 包含新的整行数据）
+    // 实时订阅：只监听 UPDATE 事件
+    // 收到更新时，只替换目标订单的 status 字段（map 遍历）
     const channel = supabase
       .channel('orders-realtime')
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'orders' },
+        { event: 'UPDATE', schema: 'public', table: 'orders' },
         (payload) => {
-          const newOrder = payload.new as Order
-          if (!newOrder) return
+          const { id, status } = payload.new as { id: number; status: string }
+          if (!id || !status) return
 
-          setOrders(prev => {
-            // 更新已有的，或追加新的
-            const idx = prev.findIndex(o => o.id === newOrder.id)
-            if (idx >= 0) {
-              const next = [...prev]
-              next[idx] = newOrder
-              return next
-            }
-            // 新插入的放最前面
-            return [newOrder, ...prev]
-          })
+          setOrders(prev =>
+            prev.map(order =>
+              order.id === id ? { ...order, status: status as Order['status'] } : order
+            )
+          )
         }
       )
       .subscribe()
 
+    // 组件卸载时销毁订阅，防止内存泄漏
     return () => {
       supabase.removeChannel(channel)
     }
