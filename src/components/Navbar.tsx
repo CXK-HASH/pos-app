@@ -66,6 +66,14 @@ export default function Navbar() {
                   🏪 商家后台
                 </Link>
               )}
+              {role === 'driver' && (
+                <Link
+                  href="/driver/dashboard"
+                  className="px-3 py-1.5 text-sm bg-blue-50 text-blue-700 rounded-xl hover:bg-blue-100 transition-colors flex items-center gap-1"
+                >
+                  🚴 骑手大厅
+                </Link>
+              )}
               <span className="text-sm text-gray-500 hidden sm:inline">{userLabel}</span>
               <button
                 onClick={handleSignOut}
