@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic'
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    const { email, password } = body
+    const { email, password, role } = body
 
     if (!email || !password) {
       return NextResponse.json({ error: '邮箱和密码不能为空' }, { status: 400 })
@@ -27,6 +27,7 @@ export async function POST(request: Request) {
       email,
       password,
       email_confirm: true,
+      user_metadata: { role: role || 'customer' },
     })
 
     if (error) {

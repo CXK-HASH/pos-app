@@ -32,6 +32,15 @@ export default function AdminDashboard() {
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!session?.user) { router.push('/login'); return }
+
+      // 路由守卫：非商家身份踢回首页
+      const role = session.user.user_metadata?.role
+      if (role !== 'merchant') {
+        alert('权限不足，只有商家可访问此页面！')
+        router.push('/')
+        return
+      }
+
       setUser({ id: session.user.id, email: session.user.email || '' })
 
       // 加载商家和分类

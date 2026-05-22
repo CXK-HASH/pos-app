@@ -89,6 +89,44 @@ export default function LoginPage() {
             />
           </div>
 
+          {isSignUp && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">身份</label>
+              <div className="flex gap-3">
+                <label className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border-2 cursor-pointer transition-all text-sm ${
+                  role === 'customer'
+                    ? 'border-orange-500 bg-orange-50 text-orange-700 font-medium'
+                    : 'border-gray-200 bg-gray-50 text-gray-500'
+                }`}>
+                  <input
+                    type="radio"
+                    name="role"
+                    value="customer"
+                    checked={role === 'customer'}
+                    onChange={() => setRole('customer')}
+                    className="hidden"
+                  />
+                  🛒 消费者
+                </label>
+                <label className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border-2 cursor-pointer transition-all text-sm ${
+                  role === 'merchant'
+                    ? 'border-orange-500 bg-orange-50 text-orange-700 font-medium'
+                    : 'border-gray-200 bg-gray-50 text-gray-500'
+                }`}>
+                  <input
+                    type="radio"
+                    name="role"
+                    value="merchant"
+                    checked={role === 'merchant'}
+                    onChange={() => setRole('merchant')}
+                    className="hidden"
+                  />
+                  🏪 商家
+                </label>
+              </div>
+            </div>
+          )}
+
           {message && (
             <p className={`text-xs ${message.type === 'error' ? 'text-red-500' : 'text-green-600'}`}>
               {message.text}

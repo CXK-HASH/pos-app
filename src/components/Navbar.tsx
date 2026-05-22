@@ -9,18 +9,19 @@ import type { User } from '@supabase/supabase-js'
 export default function Navbar() {
   const router = useRouter()
   const [user, setUser] = useState<User | null>(null)
+  const [role, setRole] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // 获取当前会话
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null)
+      setRole(session?.user?.user_metadata?.role ?? null)
       setLoading(false)
     })
 
-    // 监听认证状态变化
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null)
+      setRole(session?.user?.user_metadata?.role ?? null)
     })
 
     return () => subscription.unsubscribe()
@@ -32,8 +33,8 @@ export default function Navbar() {
   }
 
   const userLabel = user?.email
-    ? user.email.length > 20
-      ? user.email.slice(0, 18) + '...'
+    ? user.email.length > 22
+      ? user.email.slice(0, 20) + '...'
       : user.email
     : ''
 
@@ -56,8 +57,16 @@ export default function Navbar() {
           {loading ? (
             <div className="w-20 h-8 bg-gray-100 rounded-xl animate-pulse"></div>
           ) : user ? (
-            <div className="flex items-center gap-3">
-              <span className="text-sm text-gray-600 hidden sm:inline">{userLabel}</span>
+            <div className="flex items-center gap-2">
+              {role === 'merchant' && (
+                <Link
+                  href="/admin/dashboard"
+                  className="px-3 py-1.5 text-sm bg-orange-50 text-orange-700 rounded-xl hover:bg-orange-100 transition-colors flex items-center gap-1"
+                >
+                  🏪 商家后台
+                </Link>
+              )}
+              <span className="text-sm text-gray-500 hidden sm:inline">{userLabel}</span>
               <button
                 onClick={handleSignOut}
                 className="px-4 py-1.5 text-sm bg-gray-100 text-gray-600 rounded-xl hover:bg-gray-200 transition-colors"
