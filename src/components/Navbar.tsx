@@ -32,6 +32,21 @@ export default function Navbar() {
     router.refresh()
   }
 
+  const handleMerchantClick = async () => {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) return
+
+    const res = await fetch('/api/admin/my-shop', {
+      headers: { 'Authorization': `Bearer ${session.access_token}` },
+    })
+    const data = await res.json()
+    if (data.hasShop) {
+      router.push('/admin/dashboard')
+    } else {
+      router.push('/admin/setup')
+    }
+  }
+
   const userLabel = user?.email
     ? user.email.length > 22
       ? user.email.slice(0, 20) + '...'
@@ -59,12 +74,12 @@ export default function Navbar() {
           ) : user ? (
             <div className="flex items-center gap-2">
               {role === 'merchant' && (
-                <Link
-                  href="/admin/dashboard"
+                <button
+                  onClick={handleMerchantClick}
                   className="px-3 py-1.5 text-sm bg-orange-50 text-orange-700 rounded-xl hover:bg-orange-100 transition-colors flex items-center gap-1"
                 >
                   🏪 商家后台
-                </Link>
+                </button>
               )}
               {role === 'driver' && (
                 <Link

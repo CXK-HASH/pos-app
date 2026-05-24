@@ -13,6 +13,31 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState<{ type: 'error' | 'success'; text: string } | null>(null)
 
+  /** 登录成功后，根据角色做智能跳转 */
+  const redirectAfterLogin = async () => {
+    const { data: { session } } = await supabase.auth.getSession()
+    const userRole = session?.user?.user_metadata?.role
+
+    if (userRole === 'merchant') {
+      // 商家：检查是否有店铺
+      const res = await fetch('/api/admin/my-shop', {
+        headers: { 'Authorization': `Bearer ${session!.access_token}` },
+      })
+      const shopData = await res.json()
+      if (shopData.hasShop) {
+        router.push('/admin/dashboard')
+      } else {
+        router.push('/admin/setup')
+      }
+    } else if (userRole === 'driver') {
+      router.push('/driver/dashboard')
+    } else {
+      router.push('/')
+    }
+
+    router.refresh()
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
@@ -37,15 +62,11 @@ export default function LoginPage() {
         if (loginErr) throw loginErr
 
         setMessage({ type: 'success', text: '🎉 账号注册并自动激活成功！' })
-        setTimeout(() => {
-          router.push('/')
-          router.refresh()
-        }, 1500)
+        setTimeout(() => redirectAfterLogin(), 1000)
       } else {
         const result = await supabase.auth.signInWithPassword({ email, password })
         if (result.error) throw result.error
-        router.push('/')
-        router.refresh()
+        await redirectAfterLogin()
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : '操作失败'
