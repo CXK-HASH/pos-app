@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase/client'
 
@@ -12,6 +12,44 @@ export default function HomeLoginPage() {
   const [role, setRole] = useState<'customer' | 'merchant' | 'driver'>('customer')
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState<{ type: 'error' | 'success'; text: string } | null>(null)
+  const [initialCheck, setInitialCheck] = useState(true)
+
+  // 登录状态守卫：已登录用户直接分流，绝不在此页逗留
+  useEffect(() => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (session?.user) {
+        const role = session.user.user_metadata?.role
+        if (role === 'customer') {
+          router.push('/customer/home')
+        } else if (role === 'driver') {
+          router.push('/driver/dashboard')
+        } else if (role === 'merchant') {
+          const res = await fetch('/api/auth/gatekeeper', {
+            headers: { 'Authorization': `Bearer ${session.access_token}` },
+          })
+          const data = await res.json()
+          router.push(data.redirectTo || '/')
+        } else {
+          // 未知角色，留在登录页
+          setInitialCheck(false)
+        }
+      } else {
+        setInitialCheck(false)
+      }
+    })
+  }, [router])
+
+  // 首次安全检查中，显示 loading 白屏，绝不泄露任何内容
+  if (initialCheck) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-orange-50 via-amber-50 to-orange-100">
+        <div className="text-center">
+          <div className="h-10 w-10 animate-spin rounded-full border-4 border-orange-500 border-t-transparent mx-auto"></div>
+          <p className="mt-4 text-gray-500 font-medium">安全连接中，请稍候...</p>
+        </div>
+      </div>
+    )
+  }
 
   /** 登录成功后，通过 gatekeeper 统一分流 */
   const redirectAfterLogin = async () => {
