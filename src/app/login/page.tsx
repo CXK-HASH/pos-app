@@ -13,28 +13,16 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState<{ type: 'error' | 'success'; text: string } | null>(null)
 
-  /** 登录成功后，根据角色做智能跳转 */
+  /** 登录成功后，通过 gatekeeper 统一分流 */
   const redirectAfterLogin = async () => {
     const { data: { session } } = await supabase.auth.getSession()
-    const userRole = session?.user?.user_metadata?.role
+    if (!session) { router.push('/'); return }
 
-    if (userRole === 'merchant') {
-      // 商家：检查是否有店铺
-      const res = await fetch('/api/admin/my-shop', {
-        headers: { 'Authorization': `Bearer ${session!.access_token}` },
-      })
-      const shopData = await res.json()
-      if (shopData.hasShop) {
-        router.push('/admin/dashboard')
-      } else {
-        router.push('/admin/setup')
-      }
-    } else if (userRole === 'driver') {
-      router.push('/driver/dashboard')
-    } else {
-      router.push('/')
-    }
-
+    const res = await fetch('/api/auth/gatekeeper', {
+      headers: { 'Authorization': `Bearer ${session.access_token}` },
+    })
+    const data = await res.json()
+    router.push(data.redirectTo || '/')
     router.refresh()
   }
 

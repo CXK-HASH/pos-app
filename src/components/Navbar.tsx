@@ -36,15 +36,11 @@ export default function Navbar() {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) return
 
-    const res = await fetch('/api/admin/my-shop', {
+    const res = await fetch('/api/auth/gatekeeper', {
       headers: { 'Authorization': `Bearer ${session.access_token}` },
     })
     const data = await res.json()
-    if (data.hasShop) {
-      router.push('/admin/dashboard')
-    } else {
-      router.push('/admin/setup')
-    }
+    router.push(data.redirectTo || '/')
   }
 
   const userLabel = user?.email
