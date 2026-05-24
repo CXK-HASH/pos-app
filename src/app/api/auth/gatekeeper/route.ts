@@ -25,7 +25,7 @@ export async function GET(request: Request) {
 
     switch (role) {
       case 'customer':
-        return NextResponse.json({ role, redirectTo: '/' })
+        return NextResponse.json({ role, redirectTo: '/customer/home' })
 
       case 'driver':
         return NextResponse.json({ role, redirectTo: '/driver/dashboard' })

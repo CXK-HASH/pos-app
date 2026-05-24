@@ -52,7 +52,7 @@ export default function Navbar() {
   return (
     <nav className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-50">
       <div className="max-w-5xl mx-auto px-6 h-14 flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-2 font-bold text-gray-900 text-lg">
+        <Link href={role === 'customer' ? '/customer/home' : '/'} className="flex items-center gap-2 font-bold text-gray-900 text-lg">
           <span>🍽️</span>
           <span>小龙虾外卖</span>
         </Link>
@@ -95,7 +95,7 @@ export default function Navbar() {
             </div>
           ) : (
             <Link
-              href="/login"
+              href="/"
               className="px-5 py-1.5 text-sm font-medium bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-xl hover:opacity-90 transition-all"
             >
               登录/注册
