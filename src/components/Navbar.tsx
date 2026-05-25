@@ -62,7 +62,7 @@ export default function Navbar() {
         <div className="flex items-center gap-3">
           <Link
             href="/orders"
-            className="text-sm text-slate-400 hover:text-slate-200 transition-colors"
+            className="text-sm text-gray-500 hover:text-gray-700 transition-colors"
           >
             我的订单
           </Link>
@@ -87,10 +87,10 @@ export default function Navbar() {
                   🚴 骑手大厅
                 </Link>
               )}
-              <span className="text-sm text-slate-400 hidden sm:inline">{userLabel}</span>
+              <span className="text-sm text-gray-500 hidden sm:inline">{userLabel}</span>
               <button
                 onClick={handleSignOut}
-                className="px-4 py-1.5 text-sm bg-gray-100 text-slate-300 rounded-xl hover:bg-slate-800 bg-slate-800/50 transition-colors"
+                className="px-4 py-1.5 text-sm bg-gray-100 text-gray-600 rounded-xl hover:bg-gray-200 transition-colors"
               >
                 退出
               </button>

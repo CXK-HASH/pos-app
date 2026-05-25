@@ -65,22 +65,22 @@ export default function CustomerHome() {
   }, [])
 
   return (
-    <div className="min-h-screen bg-[#0B0F19]">
+    <div className="min-h-screen bg-slate-50">
       {/* 搜索与定位区 */}
-      <div className="sticky top-14 z-40 bg-slate-950/50 backdrop-blur-md border-b border-slate-900">
+      <div className="sticky top-14 z-40 bg-white/60 backdrop-blur-md border-b border-slate-100">
         <div className="max-w-5xl mx-auto px-6 py-3 flex items-center gap-3">
           <div className="flex items-center gap-1.5 shrink-0">
             <span className="text-orange-500 text-lg">📍</span>
-            <span className="font-bold text-slate-100 text-sm">天河城</span>
+            <span className="font-bold text-slate-800 text-sm">天河城</span>
             <span className="text-slate-300 text-xs">▼</span>
           </div>
           <div className="flex-1 flex">
-            <div className="flex-1 flex items-center bg-slate-800/50 rounded-full px-4 py-2">
+            <div className="flex-1 flex items-center bg-slate-100 rounded-full px-4 py-2">
               <span className="text-slate-400 text-sm">🔍</span>
               <input
                 type="text"
                 placeholder="搜索美食、商家..."
-                className="ml-2 bg-transparent text-sm text-white placeholder-slate-500 outline-none w-full"
+                className="ml-2 bg-transparent text-sm text-slate-700 placeholder-slate-400 outline-none w-full"
               />
             </div>
             <button className="ml-2 px-4 py-2 bg-gradient-to-r from-orange-500 to-red-500 text-white text-sm font-medium rounded-full shadow-sm hover:shadow-md transition-all active:scale-95">
@@ -107,7 +107,7 @@ export default function CustomerHome() {
 
         {/* 金刚区分类 */}
         <div>
-          <h3 className="text-sm font-bold text-slate-100 mb-3">🍽️ 吃什么</h3>
+          <h3 className="text-sm font-bold text-slate-800 mb-3">🍽️ 吃什么</h3>
           <div className="grid grid-cols-6 gap-3">
             {CATEGORIES.map((cat, i) => (
               <button
@@ -129,14 +129,14 @@ export default function CustomerHome() {
 
         {/* 商家推荐 */}
         <div>
-          <h3 className="text-sm font-bold text-slate-100 mb-3">
+          <h3 className="text-sm font-bold text-slate-800 mb-3">
             🔥 推荐商家
-            <span className="text-slate-500 text-xs font-normal ml-2">附近热门外卖</span>
+            <span className="text-slate-400 text-xs font-normal ml-2">附近热门外卖</span>
           </h3>
           {isLoading ? (
             <div className="flex items-center justify-center py-20">
               <div className="h-8 w-8 animate-spin rounded-full border-3 border-orange-500 border-t-transparent"></div>
-              <span className="ml-3 text-slate-500 text-sm">加载中...</span>
+              <span className="ml-3 text-slate-400 text-sm">加载中...</span>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -154,7 +154,7 @@ export default function CustomerHome() {
                         {LOGO_EMOJIS[m.name] || '🏪'}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <h2 className="text-lg font-bold text-slate-100 group-hover:text-orange-400 transition-colors">
+                        <h2 className="text-lg font-bold text-slate-800 group-hover:text-orange-600 transition-colors">
                           {m.name}
                         </h2>
                         <div className="flex items-center gap-2 mt-1.5">
@@ -164,8 +164,8 @@ export default function CustomerHome() {
                             ))}
                           </div>
                           <span className="text-amber-500 text-sm font-semibold">{m.rating}</span>
-                          <span className="text-slate-600 mx-1">·</span>
-                          <span className="text-slate-500 text-xs">月售 999+</span>
+                          <span className="text-slate-300 mx-1">·</span>
+                          <span className="text-slate-400 text-xs">月售 999+</span>
                         </div>
                         <div className="flex items-center gap-2 mt-2">
                           <span className="px-2 py-0.5 bg-orange-50 text-orange-600 text-[10px] font-medium rounded-full">满减</span>
@@ -173,9 +173,9 @@ export default function CustomerHome() {
                         </div>
                       </div>
                     </div>
-                    <div className="mt-3 pt-3 border-t border-slate-800 flex items-center justify-between">
-                      <span className="text-xs text-slate-500">⏱ 约 30 分钟</span>
-                      <span className="text-xs text-slate-500">🚚 配送费 ¥3</span>
+                    <div className="mt-3 pt-3 border-t border-slate-50 flex items-center justify-between">
+                      <span className="text-xs text-slate-400">⏱ 约 30 分钟</span>
+                      <span className="text-xs text-slate-400">🚚 配送费 ¥3</span>
                     </div>
                   </div>
                 </Link>
