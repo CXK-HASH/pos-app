@@ -32,11 +32,19 @@ export default function DriverDashboard() {
   // 路由守卫
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session?.user) { router.push('/login'); return }
+      if (!session?.user) {
+        alert('登录已失效，请重新登录！')
+        localStorage.clear()
+        sessionStorage.clear()
+        window.location.href = '/'
+        return
+      }
       const role = session.user.user_metadata?.role
       if (role !== 'driver') {
         alert('权限不足，只有骑手可访问此页面！')
-        router.push('/')
+        localStorage.clear()
+        sessionStorage.clear()
+        window.location.href = '/'
         return
       }
       setUser({ id: session.user.id, email: session.user.email || '' })

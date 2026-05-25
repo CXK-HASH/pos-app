@@ -34,12 +34,20 @@ export default function AdminDashboard() {
   useEffect(() => {
     (async () => {
       const { data: { session } } = await supabase.auth.getSession()
-      if (!session?.user) { router.push('/login'); return }
+      if (!session?.user) {
+        alert('登录已失效，请重新登录！')
+        localStorage.clear()
+        sessionStorage.clear()
+        window.location.href = '/'
+        return
+      }
 
       const role = session.user.user_metadata?.role
       if (role !== 'merchant') {
         alert('权限不足，只有商家可访问此页面！')
-        router.push('/')
+        localStorage.clear()
+        sessionStorage.clear()
+        window.location.href = '/'
         return
       }
 

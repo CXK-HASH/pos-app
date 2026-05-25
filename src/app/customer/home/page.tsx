@@ -26,13 +26,18 @@ export default function CustomerHome() {
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!session?.user) {
-        router.push('/')
+        alert('登录已失效，请重新登录！')
+        localStorage.clear()
+        sessionStorage.clear()
+        window.location.href = '/'
         return
       }
       const role = session.user.user_metadata?.role
       if (role !== 'customer') {
         alert('权限不足！')
-        router.push('/')
+        localStorage.clear()
+        sessionStorage.clear()
+        window.location.href = '/'
         return
       }
     })

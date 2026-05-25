@@ -29,7 +29,9 @@ export default function Navbar() {
 
   const handleSignOut = async () => {
     await supabase.auth.signOut()
-    router.refresh()
+    localStorage.clear()
+    sessionStorage.clear()
+    window.location.href = '/'
   }
 
   const handleMerchantClick = async () => {
