@@ -162,7 +162,7 @@ export default function MerchantPage() {
     : dishes
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-24">
+    <div className="min-h-screen bg-[#0B0F19] pb-24">
       <style jsx global>{`
         .cart-breathe {
           animation: breathe 2s ease-in-out infinite;
@@ -175,7 +175,7 @@ export default function MerchantPage() {
 
       {/* 商家头部 */}
       {merchant && (
-        <div className="bg-gradient-to-br from-slate-800 via-slate-750 to-slate-900 text-white">
+        <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-950 text-white">
           <div className="max-w-4xl mx-auto px-6 py-8">
             <div className="flex items-center gap-4 mb-3">
               <Link href="/customer/home" className="text-white/70 hover:text-white transition-colors text-lg">
@@ -212,7 +212,7 @@ export default function MerchantPage() {
         <div className="bg-white rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] p-4">
           <div className="flex items-center gap-2 mb-2">
             <span className="text-lg">🤖</span>
-            <span className="text-sm font-bold text-slate-800">DeepSeek 智能点餐</span>
+            <span className="text-sm font-bold text-slate-100">DeepSeek 智能点餐</span>
             <span className="text-[10px] bg-gradient-to-r from-orange-500 to-red-500 text-white px-2 py-0.5 rounded-full">AI</span>
           </div>
           <div className="flex gap-2">
@@ -221,7 +221,7 @@ export default function MerchantPage() {
               onChange={e => setAiPrompt(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleAiOrder()}
               placeholder="告诉我你想吃什么，比如「一杯珍珠奶茶加一份鸡排饭」"
-              className="flex-1 px-4 py-2.5 bg-slate-50 rounded-xl text-sm text-slate-700 placeholder-slate-400 outline-none focus:ring-2 focus:ring-orange-300 transition-all"
+              className="flex-1 px-4 py-2.5 bg-slate-800/50 rounded-xl text-sm text-white placeholder-slate-500 outline-none focus:ring-2 focus:ring-orange-300 transition-all"
             />
             <button
               onClick={handleAiOrder}
@@ -232,7 +232,7 @@ export default function MerchantPage() {
             </button>
           </div>
           {aiResult && (
-            <div className="mt-3 p-3 bg-orange-50 rounded-xl text-sm text-slate-700 leading-relaxed">
+            <div className="mt-3 p-3 bg-orange-500/10 rounded-xl text-sm text-slate-200 border border-orange-500/20 leading-relaxed">
               {aiResult.split('\n').map((line, i) => <p key={i}>{line}</p>)}
             </div>
           )}
@@ -245,7 +245,7 @@ export default function MerchantPage() {
             className={`shrink-0 px-4 py-1.5 rounded-full text-xs font-medium transition-all duration-200 hover:-translate-y-0.5 ${
               selectedCategoryId === null
                 ? 'bg-orange-500 text-white shadow-sm'
-                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
             }`}
           >
             全部
@@ -257,7 +257,7 @@ export default function MerchantPage() {
               className={`shrink-0 px-4 py-1.5 rounded-full text-xs font-medium transition-all duration-200 hover:-translate-y-0.5 ${
                 selectedCategoryId === cat.id
                   ? 'bg-orange-500 text-white shadow-sm'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
               }`}
             >
               {cat.name}
@@ -270,10 +270,10 @@ export default function MerchantPage() {
           {isLoading ? (
             <div className="flex items-center justify-center py-20">
               <div className="h-8 w-8 animate-spin rounded-full border-3 border-orange-500 border-t-transparent"></div>
-              <span className="ml-3 text-slate-400 text-sm">加载菜单中...</span>
+              <span className="ml-3 text-slate-500 text-sm">加载菜单中...</span>
             </div>
           ) : filteredDishes.length === 0 ? (
-            <div className="text-center py-20 text-slate-400 text-sm">😅 这个分类还没有菜品，看看别的吧</div>
+            <div className="text-center py-20 text-slate-500 text-sm">😅 这个分类还没有菜品，看看别的吧</div>
           ) : (
             filteredDishes.map((dish, idx) => (
               <div
@@ -286,7 +286,7 @@ export default function MerchantPage() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <h3 className="font-bold text-slate-800">{dish.name}</h3>
-                    <p className="text-slate-400 text-xs mt-0.5">精选食材，匠心制作</p>
+                    <p className="text-slate-500 text-xs mt-0.5">精选食材，匠心制作</p>
                     <div className="flex items-center justify-between mt-2">
                       <span className="text-orange-500 font-bold text-lg">
                         ¥<span className="text-xl">{dish.price.toFixed(1).replace('.0', '')}</span>
@@ -296,11 +296,11 @@ export default function MerchantPage() {
                           <>
                             <button
                               onClick={() => removeFromCart(dish.id)}
-                              className="w-7 h-7 bg-slate-100 rounded-full flex items-center justify-center text-slate-500 hover:bg-slate-200 transition-all active:scale-90"
+                              className="w-7 h-7 bg-slate-800 rounded-full flex items-center justify-center text-slate-400 hover:bg-slate-700 transition-all active:scale-90"
                             >
                               <span className="text-lg leading-none">−</span>
                             </button>
-                            <span className="text-sm font-semibold text-slate-700 min-w-[1.2rem] text-center">
+                            <span className="text-sm font-semibold text-slate-200 min-w-[1.2rem] text-center">
                               {cart[dish.id]}
                             </span>
                           </>
