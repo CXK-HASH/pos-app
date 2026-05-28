@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import MapPicker from '@/components/MapPicker'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase/client'
@@ -60,30 +59,9 @@ export default function CustomerHome() {
 
   // 地址
   const [address, setAddress] = useState('天河城')
-  const [coords, setCoords] = useState({ lat: 23.128, lng: 113.262 })
   const [showAddressModal, setShowAddressModal] = useState(false)
+  const [addressInput, setAddressInput] = useState('')
   const [toast, setToast] = useState('')
-
-  // 自动定位
-  useEffect(() => {
-    if (!navigator.geolocation) return
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const lat = pos.coords.latitude
-        const lng = pos.coords.longitude
-        setCoords({ lat, lng })
-        if (typeof window !== 'undefined' && (window as any).BMap) {
-          const pt = new (window as any).BMap.Point(lng, lat)
-          const gc = new (window as any).BMap.Geocoder()
-          gc.getLocation(pt, (rs: any) => {
-            if (rs?.address) setAddress(rs.address)
-          })
-        }
-      },
-      () => {},
-      { enableHighAccuracy: true, timeout: 5000 }
-    )
-  }, [])
 
   // AI 抽屉
   const [showAiDrawer, setShowAiDrawer] = useState(false)
@@ -200,11 +178,12 @@ export default function CustomerHome() {
   }, [searchQuery])
 
   // === 地址修改 ===
-  const handleAddressConfirm = (addr: string, lat: number, lng: number) => {
-    setAddress(addr)
-    setCoords({ lat, lng })
-    setToast('📍 地址已变更，已为您刷新附近热门外卖')
-    setShowAddressModal(false)
+  const handleAddressSave = () => {
+    if (addressInput.trim()) {
+      setAddress(addressInput.trim())
+      setToast('📍 地址已变更，已为您刷新附近热门外卖')
+      setShowAddressModal(false)
+    }
   }
 
   // === AI 智能点餐 ===
@@ -249,7 +228,7 @@ export default function CustomerHome() {
         <div className="max-w-5xl mx-auto px-6 py-3 flex items-center gap-3">
           {/* 地址切换 */}
           <button
-            onClick={() => setShowAddressModal(true)}
+            onClick={() => { setAddressInput(address); setShowAddressModal(true) }}
             className="flex items-center gap-1.5 shrink-0 cursor-pointer"
           >
             <span className="text-orange-500 text-lg">📍</span>
@@ -400,15 +379,44 @@ export default function CustomerHome() {
         </div>
       </div>
 
-      {/* ===== 百度地图地址选择弹窗 ===== */}
-      <MapPicker
-        open={showAddressModal}
-        onClose={() => setShowAddressModal(false)}
-        onConfirm={handleAddressConfirm}
-        initialAddress={address}
-        initialLat={coords.lat}
-        initialLng={coords.lng}
-      />
+      {/* ===== 地址选择弹窗 ===== */}
+      {showAddressModal && (
+        <div
+          className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center px-4"
+          onClick={() => setShowAddressModal(false)}
+        >
+          <div
+            className="bg-white rounded-2xl p-6 shadow-xl max-w-sm w-full"
+            onClick={e => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-bold text-slate-800 mb-1">📍 选择配送地址</h3>
+            <p className="text-xs text-slate-400 mb-4">请输入新的配送地址</p>
+            <input
+              type="text"
+              value={addressInput}
+              onChange={e => setAddressInput(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleAddressSave()}
+              placeholder="请输入地址..."
+              className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 placeholder-slate-400 focus:outline-none focus:border-orange-500 transition-all"
+              autoFocus
+            />
+            <div className="flex gap-3 mt-4">
+              <button
+                onClick={() => setShowAddressModal(false)}
+                className="flex-1 py-2.5 bg-slate-100 text-slate-600 rounded-xl text-sm font-medium hover:bg-slate-200 transition-all"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleAddressSave}
+                className="flex-1 py-2.5 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-xl text-sm font-bold hover:shadow-md transition-all"
+              >
+                确定
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ===== AI 智能食神抽屉 ===== */}
       {showAiDrawer && (

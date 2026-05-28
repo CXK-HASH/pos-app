@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
+import NavigationMap from '@/components/NavigationMap'
 
 type Order = {
   id: number
@@ -13,6 +14,23 @@ type Order = {
   driver_id: string | null
   user_id: string | null
   created_at: string
+  merchants?: { id: number; name: string; lat: number; lng: number }
+}
+
+const MERCHANT_ADDRESSES: Record<number, { address: string; lat: number; lng: number }> = {
+  5: { address: '广州天河·粤垦路', lat: 23.1291, lng: 113.2644 },
+  6: { address: '广州天河·六运小区', lat: 23.1317, lng: 113.2594 },
+  7: { address: '广州天河·体育西', lat: 23.1250, lng: 113.2650 },
+  8: { address: '广州天河·石牌桥', lat: 23.1280, lng: 113.2600 },
+  9: { address: '广州天河·正佳广场', lat: 23.1300, lng: 113.2620 },
+}
+
+// 模拟消费者配送地址（实际应该从订单中获取）
+const CONSUMER_ADDRESSES: Record<number, { address: string; lat: number; lng: number }> = {
+  5: { address: '广州天河·龙口小区', lat: 23.1360, lng: 113.2700 },
+  6: { address: '广州天河·华景新城', lat: 23.1380, lng: 113.2550 },
+  7: { address: '广州天河·珠江新城', lat: 23.1220, lng: 113.2720 },
+  8: { address: '广州天河·猎德花园', lat: 23.1200, lng: 113.2680 },
 }
 
 const STATUS_BADGE: Record<string, { label: string; color: string }> = {
@@ -28,6 +46,10 @@ export default function DriverDashboard() {
   const [pool, setPool] = useState<Order[]>([])
   const [myOrders, setMyOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
+
+  // 导航状态
+  const [navOrder, setNavOrder] = useState<Order | null>(null)
+  const [showNav, setShowNav] = useState(false)
 
   // 路由守卫
   useEffect(() => {
@@ -72,7 +94,6 @@ export default function DriverDashboard() {
 
   useEffect(() => {
     fetchData()
-    // 每 3 秒刷新
     const interval = setInterval(fetchData, 3000)
     return () => clearInterval(interval)
   }, [fetchData])
@@ -87,11 +108,8 @@ export default function DriverDashboard() {
       body: JSON.stringify({ orderId, driverId: user?.id }),
     })
     const data = await res.json()
-    if (data.success) {
-      fetchData()
-    } else {
-      alert('抢单失败: ' + (data.error || '已被抢走'))
-    }
+    if (data.success) fetchData()
+    else alert('抢单失败: ' + (data.error || '已被抢走'))
   }
 
   const handleStatus = async (orderId: number, status: string) => {
@@ -104,11 +122,13 @@ export default function DriverDashboard() {
       body: JSON.stringify({ orderId, status }),
     })
     const data = await res.json()
-    if (data.success) {
-      fetchData()
-    } else {
-      alert('操作失败: ' + (data.error || '未知错误'))
-    }
+    if (data.success) fetchData()
+    else alert('操作失败: ' + (data.error || '未知错误'))
+  }
+
+  const handleNavigate = (order: Order) => {
+    setNavOrder(order)
+    setShowNav(true)
   }
 
   if (!user) {
@@ -181,42 +201,74 @@ export default function DriverDashboard() {
               <div className="text-center py-16 text-gray-500 text-sm">暂无配送订单</div>
             ) : (
               <div className="space-y-3">
-                {myOrders.map(order => (
-                  <div key={order.id} className="bg-gray-900 rounded-2xl border border-gray-800 p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-white font-medium">订单 #{order.id}</span>
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_BADGE[order.status]?.color || ''}`}>
-                        {STATUS_BADGE[order.status]?.label || order.status}
-                      </span>
-                    </div>
-                    <div className="text-sm text-gray-400 mb-1">
-                      商家 ID: {order.merchant_id || '-'} · {order.items?.length || 0} 件商品
-                    </div>
-                    <div className="text-orange-400 font-bold text-lg mb-3">¥{parseFloat(order.total_price as unknown as string).toFixed(2)}</div>
+                {myOrders.map(order => {
+                  const mAddr = order.merchant_id ? MERCHANT_ADDRESSES[order.merchant_id] : null
+                  const cAddr = order.merchant_id ? CONSUMER_ADDRESSES[order.merchant_id] : null
+                  return (
+                    <div key={order.id} className="bg-gray-900 rounded-2xl border border-gray-800 p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-white font-medium">订单 #{order.id}</span>
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_BADGE[order.status]?.color || ''}`}>
+                          {STATUS_BADGE[order.status]?.label || order.status}
+                        </span>
+                      </div>
+                      <div className="text-sm text-gray-400 mb-1">
+                        {mAddr ? `${mAddr.address}` : `商家 ID: ${order.merchant_id || '-'}`} · {order.items?.length || 0} 件商品
+                      </div>
+                      <div className="text-orange-400 font-bold text-lg mb-3">¥{parseFloat(order.total_price as unknown as string).toFixed(2)}</div>
 
-                    {order.status === 'processing' && (
-                      <button
-                        onClick={() => handleStatus(order.id, 'shipping')}
-                        className="w-full py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold rounded-xl hover:opacity-90 transition-all flex items-center justify-center gap-2"
-                      >
-                        🥡 已到店取货
-                      </button>
-                    )}
-                    {order.status === 'shipping' && (
-                      <button
-                        onClick={() => handleStatus(order.id, 'completed')}
-                        className="w-full py-2.5 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-semibold rounded-xl hover:opacity-90 transition-all flex items-center justify-center gap-2"
-                      >
-                        🏁 已送达顾客
-                      </button>
-                    )}
-                  </div>
-                ))}
+                      {/* 查看导航按钮 */}
+                      {mAddr && cAddr && (
+                        <button
+                          onClick={() => handleNavigate(order)}
+                          className="w-full py-2.5 bg-gradient-to-r from-blue-600 to-cyan-600 text-white font-semibold rounded-xl hover:opacity-90 transition-all flex items-center justify-center gap-2 mb-2"
+                        >
+                          🗺️ 查看导航路线
+                        </button>
+                      )}
+
+                      {order.status === 'processing' && (
+                        <button
+                          onClick={() => handleStatus(order.id, 'shipping')}
+                          className="w-full py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold rounded-xl hover:opacity-90 transition-all flex items-center justify-center gap-2"
+                        >
+                          🥡 已到店取货
+                        </button>
+                      )}
+                      {order.status === 'shipping' && (
+                        <button
+                          onClick={() => handleStatus(order.id, 'completed')}
+                          className="w-full py-2.5 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-semibold rounded-xl hover:opacity-90 transition-all flex items-center justify-center gap-2"
+                        >
+                          🏁 已送达顾客
+                        </button>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             )}
           </div>
         </div>
       )}
+
+      {/* 导航地图弹窗 */}
+      {navOrder && navOrder.merchant_id && MERCHANT_ADDRESSES[navOrder.merchant_id] && CONSUMER_ADDRESSES[navOrder.merchant_id] && (() => {
+        const m = MERCHANT_ADDRESSES[navOrder.merchant_id!]
+        const c = CONSUMER_ADDRESSES[navOrder.merchant_id!]
+        return (
+          <NavigationMap
+            open={showNav}
+            onClose={() => setShowNav(false)}
+            merchantName={m.address}
+            fromLat={m.lat}
+            fromLng={m.lng}
+            toAddress={c.address}
+            toLat={c.lat}
+            toLng={c.lng}
+          />
+        )
+      })()}
     </div>
   )
 }
