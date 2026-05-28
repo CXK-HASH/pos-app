@@ -1,28 +1,56 @@
 import { NextResponse } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
 
 const DEEPSEEK_URL = 'https://api.deepseek.com/v1/chat/completions'
 
-const VALID_TAGS = ['人气热销', '精选主食', '特色小吃', '招牌饮品']
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+)
 
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    const { text } = body
+    const { text, merchants, dishes } = body
 
     if (!text || typeof text !== 'string' || text.trim().length === 0) {
       return NextResponse.json({ error: '请输入点餐描述' }, { status: 400 })
     }
 
+    // 获取当前所有菜品和商家信息
+    let merchantList = merchants
+    let dishList = dishes
+    if (!merchantList) {
+      const { data: m } = await supabase.from('merchants').select('id, name, rating')
+      merchantList = m || []
+    }
+    if (!dishList) {
+      const { data: d } = await supabase.from('dishes').select('id, name, merchant_id, price')
+      dishList = d || []
+    }
+
+    // 构建商店菜单文本供 AI 分析
+    const menuText = (merchantList as any[]).map((m: any) => {
+      const mDishes = (dishList as any[]).filter((d: any) => d.merchant_id === m.id)
+      return `商家「${m.name}」(id:${m.id}, 评分:${m.rating}) 的菜品: ${mDishes.map((d: any) => `${d.name} ¥${d.price}`).join(', ')}`
+    }).join('\n')
+
     const apiKey = process.env.DEEPSEEK_API_KEY
     if (!apiKey) {
       console.error('DEEPSEEK_API_KEY 未设置')
-      return NextResponse.json({ tags: [], analysis: '' })
+      return NextResponse.json({ reply: 'AI 服务未配置，请稍后再试' })
     }
 
-    const systemPrompt = `你是一个专业的外卖语义分析助手。请分析用户想吃的食物诉求，从以下固定的店内分类中，挑选出最符合用户需求的【1个或多个】分类名称：['人气热销', '精选主食', '特色小吃', '招牌饮品']。
+    const systemPrompt = `你是一个专业的外卖推荐助手。以下是当前可点餐的商家和菜品信息：
 
-请严格按照以下 JSON 格式返回，不要包含任何 markdown 标记（如 \`\`\`json）、换行符或额外解释：
-{"tags": ["精选主食", "招牌饮品"], "analysis": "用户提到了想吃饭和喝饮料"}`
+${menuText}
+
+请分析用户的点餐需求，从以上商家和菜品中推荐最匹配的选项。
+请严格按照以下 JSON 格式返回（不要 markdown 标记或额外文字）：
+{"merchants": [{"id": <商家id>, "name": "<商家名>", "dishes": ["<菜品名1>", "<菜品名2>"]}], "reply": "用口语化的方式告知用户推荐了哪些商家和菜品，一共几句话就好"}
+
+- merchants 数组：推荐 1~3 个最符合条件的商家及其对应菜品
+- reply 字段：一段自然语言回答，让用户感觉是 AI 在对话`
 
     const response = await fetch(DEEPSEEK_URL, {
       method: 'POST',
@@ -36,40 +64,41 @@ export async function POST(request: Request) {
           { role: 'system', content: systemPrompt },
           { role: 'user', content: text.trim() },
         ],
-        max_tokens: 150,
-        temperature: 0.1,
+        max_tokens: 500,
+        temperature: 0.3,
       }),
     })
 
     if (!response.ok) {
       const errText = await response.text()
       console.error('DeepSeek API error:', response.status, errText)
-      return NextResponse.json({ tags: [], analysis: '' })
+      return NextResponse.json({ reply: '抱歉，AI 暂时无法响应，请稍后重试' })
     }
 
     const data = await response.json()
-    const content = data.choices?.[0]?.message?.content || ''
+    let content = data.choices?.[0]?.message?.content || ''
 
     // 解析 JSON 响应
-    let parsed: { tags: string[]; analysis: string }
+    let parsed: { merchants: { id: number; name: string; dishes: string[] }[]; reply: string }
     try {
-      parsed = JSON.parse(content.trim().replace(/^```(?:json)?\s*|\s*```$/g, ''))
+      content = content.trim().replace(/^```(?:json)?\s*|\s*```$/g, '')
+      parsed = JSON.parse(content)
     } catch {
       console.error('DeepSeek 返回格式异常:', content)
-      return NextResponse.json({ tags: [], analysis: '' })
+      return NextResponse.json({ merchants: [], reply: content })
     }
 
-    // 校验并过滤 tags 中的合法值
-    const validTags = (parsed.tags || []).filter((t: string) => VALID_TAGS.includes(t))
+    // 校验 merchants 中的 id 必须存在于数据库
+    const validIds = new Set((merchantList as any[]).map((m: any) => m.id))
+    const validMerchants = (parsed.merchants || []).filter((m: any) => validIds.has(m.id))
 
     return NextResponse.json({
-      tags: validTags,
-      analysis: parsed.analysis || '',
+      merchants: validMerchants,
+      reply: parsed.reply || '已为您推荐了合适的商家~',
     })
   } catch (err) {
     console.error('AI classify error:', err)
-    // 异常时安全 fallback
-    return NextResponse.json({ tags: [], analysis: '' })
+    return NextResponse.json({ merchants: [], reply: '网络异常，请重试' })
   }
 }
 
