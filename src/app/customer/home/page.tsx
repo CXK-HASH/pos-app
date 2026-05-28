@@ -219,19 +219,15 @@ export default function CustomerHome() {
     setAiPrompt('')
 
     try {
-      const res = await fetch('/api/ai-classify', {
+      const res = await fetch('/api/ai/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          text: userMsg,
-          merchants: merchants.map(m => ({ id: m.id, name: m.name, rating: m.rating })),
-          dishes: allDishes.map(d => ({ id: d.id, name: d.name, merchant_id: d.merchant_id, price: d.price })),
-        }),
+        body: JSON.stringify({ message: userMsg }),
       })
       const data = await res.json()
-      const reply = data.reply || '没能理解您的需求，请重新描述~'
+      const reply = data.text || '没能理解您的需求，请重新描述~'
       setAiReply(reply)
-      setAiRecommendations(data.merchants || [])
+      setAiRecommendations([])
       setAiHistory(prev => [...prev, { role: 'ai', text: reply }])
     } catch {
       const errMsg = '网络异常，请重试'
@@ -456,28 +452,26 @@ export default function CustomerHome() {
                       {msg.text}
                     </div>
                   </div>
-                  {/* AI 推荐商家卡片 */}
-                  {msg.role === 'ai' && i === aiHistory.length - 1 && aiRecommendations.length > 0 && (
-                    <div className="mt-3 space-y-2">
-                      {aiRecommendations.map(rec => (
-                        <Link
-                          key={rec.id}
-                          href={`/merchant/${rec.id}`}
-                          onClick={() => setShowAiDrawer(false)}
-                          className="block bg-white rounded-xl border border-orange-100 p-3 hover:shadow-md transition-all hover:-translate-y-0.5"
-                        >
-                          <div className="flex items-center gap-2">
-                            <span className="text-lg">{LOGO_EMOJIS[rec.name] || '🏪'}</span>
-                            <div>
-                              <p className="text-sm font-bold text-slate-800">{rec.name}</p>
-                              <p className="text-xs text-slate-400">{rec.dishes.join('、')}</p>
-                            </div>
-                            <span className="ml-auto text-orange-400 text-xs">去点餐 →</span>
-                          </div>
-                        </Link>
-                      ))}
-                    </div>
-                  )}
+                  {/* AI 推荐商家卡片 — 从纯文本提取商家名生成快捷入口 */}
+                  {msg.role === 'ai' && i === aiHistory.length - 1 && (() => {
+                    const names: Record<string, number> = { '湘味木桶饭': 5, '蜜雪冰城': 6, '阿叔奶茶': 7 }
+                    const found = Object.keys(names).filter(n => msg.text.includes(n))
+                    if (found.length === 0) return null
+                    return (
+                      <div className="mt-3 flex gap-2 flex-wrap">
+                        {found.map(name => (
+                          <Link
+                            key={names[name]}
+                            href={`/merchant/${names[name]}`}
+                            onClick={() => setShowAiDrawer(false)}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 bg-orange-50 text-orange-700 text-xs font-medium rounded-full hover:bg-orange-100 transition-all"
+                          >
+                            {LOGO_EMOJIS[name] || '🏪'} {name} →
+                          </Link>
+                        ))}
+                      </div>
+                    )
+                  })()}
                 </div>
               ))}
               {aiLoading && (
