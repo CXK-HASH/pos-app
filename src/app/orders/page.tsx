@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
@@ -22,6 +22,7 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   pending:    { label: '待支付',     color: 'bg-gray-100 text-gray-600' },
   paid:       { label: '已支付',     color: 'bg-blue-100 text-blue-700' },
   processing: { label: '制作中',     color: 'bg-yellow-100 text-yellow-700' },
+  prepared:   { label: '已制作完成', color: 'bg-green-100 text-green-700' },
   shipping:   { label: '配送中',     color: 'bg-purple-100 text-purple-700' },
   completed:  { label: '已完成',     color: 'bg-green-100 text-green-700' },
 }
@@ -38,6 +39,20 @@ export default function OrdersPage() {
   const [role, setRole] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [notLoggedIn, setNotLoggedIn] = useState(false)
+  const [updatingId, setUpdatingId] = useState<number | null>(null)
+
+  const fetchOrders = useCallback(async () => {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.access_token) return
+
+    const res = await fetch('/api/orders', {
+      headers: { 'Authorization': `Bearer ${session.access_token}` },
+    })
+    const data = await res.json()
+    if (data && Array.isArray(data.orders)) {
+      setOrders(data.orders)
+    }
+  }, [])
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -46,24 +61,34 @@ export default function OrdersPage() {
         setIsLoading(false)
         return
       }
-
-      const currentRole = session.user.user_metadata?.role || 'consumer'
-      setRole(currentRole)
-
-      fetch('/api/orders', {
-        headers: { 'Authorization': `Bearer ${session.access_token}` },
-      })
-        .then(r => r.json())
-        .then(data => {
-          // 后端返回 { orders: [...], role: 'xxx' }
-          if (data && Array.isArray(data.orders)) {
-            setOrders(data.orders)
-          }
-          setIsLoading(false)
-        })
-        .catch(() => setIsLoading(false))
+      setRole(session.user.user_metadata?.role || 'consumer')
+      fetchOrders().then(() => setIsLoading(false))
     })
-  }, [])
+  }, [fetchOrders])
+
+  // 统一状态更新函数
+  const updateStatus = async (orderId: number, status: string) => {
+    setUpdatingId(orderId)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) return
+
+      const res = await fetch('/api/orders/update-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+        body: JSON.stringify({ orderId, status }),
+      })
+      const data = await res.json()
+      if (!data.success) {
+        alert(data.error || '操作失败')
+      }
+      await fetchOrders()
+    } catch {
+      alert('网络异常')
+    } finally {
+      setUpdatingId(null)
+    }
+  }
 
   if (notLoggedIn) {
     return (
@@ -92,7 +117,6 @@ export default function OrdersPage() {
           <div className="text-center py-20">
             <div className="text-4xl mb-3">📭</div>
             <p className="text-gray-400">暂无订单</p>
-            {/* 角色隔离：只有消费者显示"去点餐" */}
             {role === 'consumer' && (
               <Link href="/" className="text-orange-600 text-sm mt-2 inline-block hover:underline">
                 去点餐 →
@@ -109,6 +133,8 @@ export default function OrdersPage() {
           <div className="space-y-4">
             {orders.map(order => {
               const cfg = STATUS_LABELS[order.status] || STATUS_LABELS.pending
+              const isProcessing = updatingId === order.id
+
               return (
                 <div key={order.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
                   <div className="flex items-center justify-between mb-3">
@@ -119,7 +145,7 @@ export default function OrdersPage() {
                       </span>
                       {role === 'merchant' && (
                         <span className="text-xs text-gray-400">
-                          消费者 ID: {(order.user_id || '-').slice(0, 8)}...
+                          消费者: {(order.user_id || '-').slice(0, 8)}...
                         </span>
                       )}
                       {role === 'driver' && (
@@ -133,7 +159,7 @@ export default function OrdersPage() {
                     </span>
                   </div>
 
-                  <div className="border-t border-gray-50 pt-2 mb-3">
+                  <div className="border-t border-gray-50 pt-2 mb-1">
                     {order.items.map((item, idx) => (
                       <div key={idx} className="flex justify-between text-sm py-1">
                         <span className="text-gray-700">{item.name}</span>
@@ -142,7 +168,8 @@ export default function OrdersPage() {
                     ))}
                   </div>
 
-                  <div className="border-t border-gray-100 pt-3">
+                  {/* 总价 */}
+                  <div className="border-t border-gray-100 pt-3 mb-3">
                     <div className="flex items-center justify-between">
                       <span className="text-gray-400 text-xs">商家 ID: {order.merchant_id || '-'}</span>
                       <span className="text-lg font-bold text-gray-900">
@@ -150,6 +177,46 @@ export default function OrdersPage() {
                       </span>
                     </div>
                   </div>
+
+                  {/* ===== 商家操作区 ===== */}
+                  {role === 'merchant' && order.status === 'processing' && (
+                    <button
+                      onClick={() => updateStatus(order.id, 'prepared')}
+                      disabled={isProcessing}
+                      className="w-full py-2.5 bg-gradient-to-r from-green-500 to-emerald-500 text-white font-semibold rounded-xl hover:opacity-90 transition-all disabled:opacity-50 active:scale-[0.98]"
+                    >
+                      {isProcessing ? '处理中...' : '✅ 制作完成'}
+                    </button>
+                  )}
+
+                  {/* ===== 骑手操作区 ===== */}
+                  {role === 'driver' && order.status === 'prepared' && (
+                    <button
+                      onClick={() => updateStatus(order.id, 'shipping')}
+                      disabled={isProcessing}
+                      className="w-full py-2.5 bg-gradient-to-r from-blue-500 to-indigo-500 text-white font-semibold rounded-xl hover:opacity-90 transition-all disabled:opacity-50 active:scale-[0.98]"
+                    >
+                      {isProcessing ? '处理中...' : '🥡 已取货配送'}
+                    </button>
+                  )}
+                  {role === 'driver' && order.status === 'shipping' && (
+                    <button
+                      onClick={() => updateStatus(order.id, 'completed')}
+                      disabled={isProcessing}
+                      className="w-full py-2.5 bg-gradient-to-r from-green-500 to-emerald-500 text-white font-semibold rounded-xl hover:opacity-90 transition-all disabled:opacity-50 active:scale-[0.98]"
+                    >
+                      {isProcessing ? '处理中...' : '🏁 已送达顾客'}
+                    </button>
+                  )}
+                  {/* 骑手看到非 shipping/prepared 状态的订单时，按钮置灰 */}
+                  {role === 'driver' && order.status !== 'prepared' && order.status !== 'shipping' && (
+                    <button
+                      disabled
+                      className="w-full py-2.5 bg-gray-300 text-gray-500 font-semibold rounded-xl cursor-not-allowed"
+                    >
+                      {order.status === 'processing' ? '⏳ 等待商家制作' : `⏳ 当前状态: ${cfg.label}`}
+                    </button>
+                  )}
                 </div>
               )
             })}

@@ -36,6 +36,7 @@ const CONSUMER_ADDRESSES: Record<number, { address: string; lat: number; lng: nu
 const STATUS_BADGE: Record<string, { label: string; color: string }> = {
   paid:      { label: '待取餐',   color: 'bg-yellow-900/40 text-yellow-400' },
   processing:{ label: '制作中',   color: 'bg-blue-900/40 text-blue-400' },
+  prepared:  { label: '已制作完成', color: 'bg-green-900/40 text-green-400' },
   shipping:  { label: '配送中',   color: 'bg-purple-900/40 text-purple-400' },
   completed: { label: '已送达',   color: 'bg-green-900/40 text-green-400' },
 }
@@ -227,7 +228,7 @@ export default function DriverDashboard() {
                         </button>
                       )}
 
-                      {order.status === 'processing' && (
+                      {order.status === 'prepared' && (
                         <button
                           onClick={() => handleStatus(order.id, 'shipping')}
                           className="w-full py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold rounded-xl hover:opacity-90 transition-all flex items-center justify-center gap-2"
@@ -241,6 +242,15 @@ export default function DriverDashboard() {
                           className="w-full py-2.5 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-semibold rounded-xl hover:opacity-90 transition-all flex items-center justify-center gap-2"
                         >
                           🏁 已送达顾客
+                        </button>
+                      )}
+                      {/* 商家还没制作完成：置灰显示等待状态 */}
+                      {order.status === 'processing' && (
+                        <button
+                          disabled
+                          className="w-full py-2.5 bg-gray-700 text-gray-500 font-semibold rounded-xl cursor-not-allowed"
+                        >
+                          ⏳ 等待商家制作完成
                         </button>
                       )}
                     </div>
