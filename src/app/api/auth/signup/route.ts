@@ -17,9 +17,14 @@ export async function POST(request: Request) {
     }
 
     // 用 Service Role Key 创建确认过的用户（绕过邮件验证）
+    // 兼容 Vercel 环境变量名（NEXT_PUBLIC_ 前缀仅为本地 .env.local 向后兼容）
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY
+    if (!serviceKey) {
+      return NextResponse.json({ error: '服务密钥未配置，请联系管理员' }, { status: 500 })
+    }
     const supabaseAdmin = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY!,
+      serviceKey,
       { auth: { autoRefreshToken: false, persistSession: false } }
     )
 

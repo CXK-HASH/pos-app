@@ -112,7 +112,7 @@ export default function MerchantPage() {
 
     setIsSubmitting(true)
     try {
-      const items = Object.entries(cart).map(([dishId, quantity]) => {
+      const cartItems = Object.entries(cart).map(([dishId, quantity]) => {
         const dish = dishes.find(d => d.id === Number(dishId))
         return { name: dish!.name, price: dish!.price, quantity }
       })
@@ -120,7 +120,11 @@ export default function MerchantPage() {
       const res = await fetch('/api/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
-        body: JSON.stringify({ merchantId, items }),
+        body: JSON.stringify({
+          merchantId,
+          cart: cartItems,
+          totalPrice: cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0),
+        }),
       })
 
       const data = await res.json()
