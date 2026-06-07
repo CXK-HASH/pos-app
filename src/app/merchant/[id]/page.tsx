@@ -112,22 +112,47 @@ export default function MerchantPage() {
 
     setIsSubmitting(true)
     try {
+      // 强类型转换：dishId → number, quantity → number, price → number
       const cartItems = Object.entries(cart).map(([dishId, quantity]) => {
         const dish = dishes.find(d => d.id === Number(dishId))
-        return { name: dish!.name, price: dish!.price, quantity }
-      })
+        if (!dish) {
+          console.error('[PROD_DEBUG] 未找到菜品:', dishId)
+          return null
+        }
+        return {
+          dish_id: Number(dish.id),
+          name: dish.name,
+          price: Number(dish.price),
+          quantity: Number(quantity),
+        }
+      }).filter(Boolean)
+
+      const payload = {
+        merchantId: Number(merchantId),
+        cart: cartItems,
+        totalPrice: cartItems.reduce((sum, item) => sum + (item ? item.price * item.quantity : 0), 0),
+      }
+
+      console.log('[PROD_DEBUG] 提交前的 cart 状态:', JSON.stringify(cart))
+      console.log('[PROD_DEBUG] 前端即将提交的完整 Payload:', JSON.stringify(payload))
 
       const res = await fetch('/api/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
-        body: JSON.stringify({
-          merchantId,
-          cart: cartItems,
-          totalPrice: cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0),
-        }),
+        body: JSON.stringify(payload),
       })
 
-      const data = await res.json()
+      const responseText = await res.text()
+      console.log('[PROD_DEBUG] 后端原始响应:', responseText)
+
+      let data
+      try {
+        data = JSON.parse(responseText)
+      } catch {
+        alert('后端返回异常: ' + responseText)
+        return
+      }
+
       if (data.success) {
         setCart({})
         setShowCartMobile(false)
@@ -135,7 +160,8 @@ export default function MerchantPage() {
       } else {
         alert(data.error || '下单失败')
       }
-    } catch {
+    } catch (err) {
+      console.error('[PROD_DEBUG] fetch 异常:', err)
       alert('网络异常')
     } finally {
       setIsSubmitting(false)
