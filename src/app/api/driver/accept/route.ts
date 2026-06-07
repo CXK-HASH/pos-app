@@ -3,6 +3,9 @@ import { createClient } from '@supabase/supabase-js'
 
 export const dynamic = 'force-dynamic'
 
+const getServiceKey = () =>
+  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY || ''
+
 export async function PUT(request: Request) {
   try {
     const body = await request.json()
@@ -18,7 +21,7 @@ export async function PUT(request: Request) {
     if (authHeader?.startsWith('Bearer ')) {
       const supabaseAdmin = createClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY!,
+        getServiceKey(),
         { auth: { autoRefreshToken: false, persistSession: false } }
       )
       const { data: { user } } = await supabaseAdmin.auth.getUser(authHeader.slice(7))
@@ -28,7 +31,7 @@ export async function PUT(request: Request) {
 
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY!,
+      getServiceKey(),
       { auth: { autoRefreshToken: false, persistSession: false } }
     )
 
@@ -40,13 +43,17 @@ export async function PUT(request: Request) {
       .is('driver_id', null)
       .select()
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    if (error) {
+      console.error('[ACCEPT_DEBUG] 更新失败:', JSON.stringify(error))
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
     if (!data || data.length === 0) {
       return NextResponse.json({ error: '订单已被抢走' }, { status: 409 })
     }
 
     return NextResponse.json({ success: true, order: data[0] })
   } catch (err) {
+    console.error('[ACCEPT_DEBUG] 异常:', err)
     return NextResponse.json({ error: '抢单失败: ' + (err as Error).message }, { status: 500 })
   }
 }

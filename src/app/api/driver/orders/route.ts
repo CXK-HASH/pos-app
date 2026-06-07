@@ -3,13 +3,16 @@ import { createClient } from '@supabase/supabase-js'
 
 export const dynamic = 'force-dynamic'
 
+const getServiceKey = () =>
+  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY || ''
+
 export async function GET(request: Request) {
   const authHeader = request.headers.get('Authorization')
   let userId: string | null = null
   if (authHeader?.startsWith('Bearer ')) {
     const supabaseAdmin = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY!,
+      getServiceKey(),
       { auth: { autoRefreshToken: false, persistSession: false } }
     )
     const { data: { user } } = await supabaseAdmin.auth.getUser(authHeader.slice(7))
@@ -19,17 +22,28 @@ export async function GET(request: Request) {
 
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY!,
+    getServiceKey(),
     { auth: { autoRefreshToken: false, persistSession: false } }
   )
 
+  // 已接的订单：包括 pending（刚接入还未推进）、processing、shipping
   const { data, error } = await supabase
     .from('orders')
     .select('*')
     .eq('driver_id', userId)
-    .in('status', ['processing', 'shipping'])
+    .in('status', ['pending', 'processing', 'shipping'])
     .order('created_at', { ascending: false })
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json(data)
+  if (error) {
+    console.error('[DRIVER_ORDERS_DEBUG] 查询失败:', JSON.stringify(error))
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+
+  // 兜底：返回空数组而不是 null
+  const safeData = (data || []).map((o) => ({
+    ...o,
+    total_price: Number(o.total_price),
+  }))
+
+  return NextResponse.json(safeData)
 }
