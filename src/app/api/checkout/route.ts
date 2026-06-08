@@ -50,12 +50,38 @@ export async function POST(request: Request) {
     { auth: { autoRefreshToken: false, persistSession: false } }
   )
 
+  // 查询商户的地址经纬度快照
+  let merchantLat: number | null = null
+  let merchantLng: number | null = null
+  let merchantAddress: string | null = null
+  if (merchantIdNum && !Number.isNaN(merchantIdNum)) {
+    const { data: mer } = await supabase
+      .from('merchants')
+      .select('lat, lng, address, name')
+      .eq('id', merchantIdNum)
+      .maybeSingle()
+    if (mer) {
+      merchantLat = mer.lat ? Number(mer.lat) : null
+      merchantLng = mer.lng ? Number(mer.lng) : null
+      merchantAddress = mer.address || null
+    }
+  }
+
+  // 消费者地址由前端传入，订单中暂存空间快照以便骑手端展示
   const orderData = {
     total_price: Number(totalPrice),
     items: cart,
     status: 'pending',
     merchant_id: Number.isNaN(merchantIdNum) ? null : merchantIdNum,
     user_id: userId,
+    // 空间快照
+    merchant_lat: merchantLat,
+    merchant_lng: merchantLng,
+    merchant_address: merchantAddress,
+    // 消费者地址——前端后续可传入，暂留空
+    consumer_lat: null,
+    consumer_lng: null,
+    consumer_address: null,
   }
 
   console.log('[PROD_DEBUG] 即将写入 orders:', JSON.stringify(orderData))
