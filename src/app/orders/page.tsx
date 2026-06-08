@@ -15,6 +15,8 @@ type Order = {
   merchant_id: number | null
   user_id: string | null
   driver_id: string | null
+  meal_prepared: boolean
+  driver_arrived: boolean
   created_at: string
 }
 
@@ -39,7 +41,7 @@ export default function OrdersPage() {
   const [role, setRole] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [notLoggedIn, setNotLoggedIn] = useState(false)
-  const [updatingId, setUpdatingId] = useState<number | null>(null)
+  const [actionLoading, setActionLoading] = useState<number | null>(null)
 
   const fetchOrders = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession()
@@ -66,9 +68,9 @@ export default function OrdersPage() {
     })
   }, [fetchOrders])
 
-  // 统一状态更新函数
-  const updateStatus = async (orderId: number, status: string) => {
-    setUpdatingId(orderId)
+  // 统一操作回调：支持 status 更新和布尔字段更新
+  const doAction = async (orderId: number, payload: Record<string, unknown>) => {
+    setActionLoading(orderId)
     try {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) return
@@ -76,7 +78,7 @@ export default function OrdersPage() {
       const res = await fetch('/api/orders/update-status', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
-        body: JSON.stringify({ orderId, status }),
+        body: JSON.stringify({ orderId, ...payload }),
       })
       const data = await res.json()
       if (!data.success) {
@@ -86,7 +88,7 @@ export default function OrdersPage() {
     } catch {
       alert('网络异常')
     } finally {
-      setUpdatingId(null)
+      setActionLoading(null)
     }
   }
 
@@ -133,10 +135,11 @@ export default function OrdersPage() {
           <div className="space-y-4">
             {orders.map(order => {
               const cfg = STATUS_LABELS[order.status] || STATUS_LABELS.pending
-              const isProcessing = updatingId === order.id
+              const isLoading = actionLoading === order.id
 
               return (
                 <div key={order.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                  {/* 头部：订单号 + 状态标签 */}
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-3">
                       <span className="text-sm font-medium text-gray-800">订单 #{order.id}</span>
@@ -159,6 +162,7 @@ export default function OrdersPage() {
                     </span>
                   </div>
 
+                  {/* 商品明细 */}
                   <div className="border-t border-gray-50 pt-2 mb-1">
                     {order.items.map((item, idx) => (
                       <div key={idx} className="flex justify-between text-sm py-1">
@@ -178,45 +182,116 @@ export default function OrdersPage() {
                     </div>
                   </div>
 
-                  {/* ===== 商家操作区 ===== */}
-                  {role === 'merchant' && order.status === 'processing' && (
-                    <button
-                      onClick={() => updateStatus(order.id, 'prepared')}
-                      disabled={isProcessing}
-                      className="w-full py-2.5 bg-gradient-to-r from-green-500 to-emerald-500 text-white font-semibold rounded-xl hover:opacity-90 transition-all disabled:opacity-50 active:scale-[0.98]"
-                    >
-                      {isProcessing ? '处理中...' : '✅ 制作完成'}
-                    </button>
+                  {/* ========== 双线程操作区 ========== */}
+
+                  {/* === 商家： 「制作完成」按钮 === */}
+                  {role === 'merchant' && (
+                    <>
+                      {order.status === 'processing' && !order.meal_prepared && (
+                        <button
+                          onClick={() => doAction(order.id, { meal_prepared: true })}
+                          disabled={isLoading}
+                          className="w-full py-2.5 bg-gradient-to-r from-green-500 to-emerald-500 text-white font-semibold rounded-xl hover:opacity-90 transition-all disabled:opacity-50 active:scale-[0.98]"
+                        >
+                          {isLoading ? '处理中...' : '✅ 制作完成'}
+                        </button>
+                      )}
+                      {order.meal_prepared && (
+                        <div className="text-center text-sm text-green-600 font-medium py-2 bg-green-50 rounded-xl">
+                          ✅ 已标记制作完成
+                        </div>
+                      )}
+                    </>
                   )}
 
-                  {/* ===== 骑手操作区 ===== */}
-                  {role === 'driver' && order.status === 'prepared' && (
-                    <button
-                      onClick={() => updateStatus(order.id, 'shipping')}
-                      disabled={isProcessing}
-                      className="w-full py-2.5 bg-gradient-to-r from-blue-500 to-indigo-500 text-white font-semibold rounded-xl hover:opacity-90 transition-all disabled:opacity-50 active:scale-[0.98]"
-                    >
-                      {isProcessing ? '处理中...' : '🥡 已取货配送'}
-                    </button>
+                  {/* === 骑手操作区 === */}
+                  {role === 'driver' && (
+                    <>
+                      {/* 状态指示器：双因子锁状态 */}
+                      {(order.status === 'processing' || order.status === 'prepared' || order.status === 'shipping') && (
+                        <div className="flex gap-2 mb-3 text-xs">
+                          <span className={`px-2 py-1 rounded ${order.meal_prepared ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}>
+                            🍳 商家: {order.meal_prepared ? '已完成' : '制作中'}
+                          </span>
+                          <span className={`px-2 py-1 rounded ${order.driver_arrived ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}>
+                            🚴 取货: {order.driver_arrived ? '已取货' : '未取货'}
+                          </span>
+                        </div>
+                      )}
+
+                      {/* 「已到店取货」按钮：只要有 driver_id 绑定即可 */}
+                      {!order.driver_arrived && (order.status === 'processing' || order.status === 'prepared') && (
+                        <button
+                          onClick={() => doAction(order.id, { driver_arrived: true })}
+                          disabled={isLoading}
+                          className="w-full py-2.5 bg-gradient-to-r from-blue-500 to-indigo-500 text-white font-semibold rounded-xl hover:opacity-90 transition-all disabled:opacity-50 active:scale-[0.98]"
+                        >
+                          {isLoading ? '处理中...' : '🥡 已到店取货'}
+                        </button>
+                      )}
+                      {order.driver_arrived && !order.meal_prepared && (
+                        <div className="text-center text-sm text-blue-600 font-medium py-2 bg-blue-50 rounded-xl">
+                          🥡 已取货，等待商家制作完成
+                        </div>
+                      )}
+
+                      {/* 「已送达顾客」按钮：复合锁——必须 meal_prepared && driver_arrived */}
+                      {!order.driver_arrived && order.status !== 'shipping' && order.status !== 'completed' && !order.meal_prepared && !order.driver_arrived && order.status !== 'completed' && (
+                        <button
+                          disabled
+                          className="w-full py-2.5 bg-gray-300 text-gray-500 font-semibold rounded-xl cursor-not-allowed"
+                        >
+                          ⏳ 等待商家制作并到店取货
+                        </button>
+                      )}
+
+                      {order.driver_arrived && !order.meal_prepared && (
+                        <button
+                          disabled
+                          className="w-full py-2.5 bg-gray-300 text-gray-500 font-semibold rounded-xl cursor-not-allowed"
+                        >
+                          ⏳ 等待商家制作完成才能送达
+                        </button>
+                      )}
+
+                      {order.meal_prepared && !order.driver_arrived && (
+                        <button
+                          disabled
+                          className="w-full py-2.5 bg-gray-300 text-gray-500 font-semibold rounded-xl cursor-not-allowed"
+                        >
+                          ⏳ 先去店里取货再送达
+                        </button>
+                      )}
+
+                      {/* 双因子都满足：解锁「已送达」 */}
+                      {order.meal_prepared && order.driver_arrived && order.status !== 'completed' && order.status !== 'shipping' && (
+                        <button
+                          onClick={() => doAction(order.id, { status: 'shipping' })}
+                          disabled={isLoading}
+                          className="w-full py-2.5 bg-gradient-to-r from-yellow-500 to-amber-500 text-white font-semibold rounded-xl hover:opacity-90 transition-all disabled:opacity-50 active:scale-[0.98]"
+                        >
+                          {isLoading ? '处理中...' : '🚚 开始配送'}
+                        </button>
+                      )}
+
+                      {order.status === 'shipping' && order.meal_prepared && order.driver_arrived && (
+                        <button
+                          onClick={() => doAction(order.id, { status: 'completed' })}
+                          disabled={isLoading}
+                          className="w-full py-2.5 bg-gradient-to-r from-green-500 to-emerald-500 text-white font-semibold rounded-xl hover:opacity-90 transition-all disabled:opacity-50 active:scale-[0.98]"
+                        >
+                          {isLoading ? '处理中...' : '🏁 已送达顾客'}
+                        </button>
+                      )}
+
+                      {order.status === 'completed' && (
+                        <div className="text-center text-sm text-green-600 font-medium py-2 bg-green-50 rounded-xl">
+                          ✅ 订单已完成
+                        </div>
+                      )}
+                    </>
                   )}
-                  {role === 'driver' && order.status === 'shipping' && (
-                    <button
-                      onClick={() => updateStatus(order.id, 'completed')}
-                      disabled={isProcessing}
-                      className="w-full py-2.5 bg-gradient-to-r from-green-500 to-emerald-500 text-white font-semibold rounded-xl hover:opacity-90 transition-all disabled:opacity-50 active:scale-[0.98]"
-                    >
-                      {isProcessing ? '处理中...' : '🏁 已送达顾客'}
-                    </button>
-                  )}
-                  {/* 骑手看到非 shipping/prepared 状态的订单时，按钮置灰 */}
-                  {role === 'driver' && order.status !== 'prepared' && order.status !== 'shipping' && (
-                    <button
-                      disabled
-                      className="w-full py-2.5 bg-gray-300 text-gray-500 font-semibold rounded-xl cursor-not-allowed"
-                    >
-                      {order.status === 'processing' ? '⏳ 等待商家制作' : `⏳ 当前状态: ${cfg.label}`}
-                    </button>
-                  )}
+
                 </div>
               )
             })}
