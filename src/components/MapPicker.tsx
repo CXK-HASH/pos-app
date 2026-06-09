@@ -38,13 +38,27 @@ export default function MapPicker({ open, onClose, onConfirm, initialAddress, in
   // POI 联想
   const [suggestions, setSuggestions] = useState<PoiItem[]>([])
   const [showSuggestions, setShowSuggestions] = useState(false)
+  const [bmapReady, setBmapReady] = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined)
   const panelRef = useRef<HTMLDivElement>(null)
   const autoCompleteRef = useRef<any>(null)
 
+  // 等 BMap 就绪
+  useEffect(() => {
+    if (!open) return
+    const check = () => {
+      if (typeof window !== 'undefined' && window.BMap) {
+        setBmapReady(true)
+      } else {
+        setTimeout(check, 200)
+      }
+    }
+    check()
+  }, [open])
+
   // ==================== 地图初始化 ====================
   useEffect(() => {
-    if (!open || !window.BMap || !mapRef.current) return
+    if (!open || !bmapReady || !mapRef.current) return
 
     // 清理旧实例
     if (map) return // 已初始化

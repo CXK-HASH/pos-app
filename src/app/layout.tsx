@@ -24,16 +24,29 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const mapAk = process.env.NEXT_PUBLIC_BAIDU_MAP_AK || ''
+
   return (
     <html
       lang="zh-CN"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-gray-50">
-        <Script
-          src={`https://api.map.baidu.com/api?v=3.0&ak=${process.env.NEXT_PUBLIC_BAIDU_MAP_AK}`}
-          strategy="beforeInteractive"
-        />
+        {/* 百度地图 SDK — afterInteractive 异步加载，避免 document.write 冲突 */}
+        {mapAk ? (
+          <Script
+            src={`https://api.map.baidu.com/api?v=3.0&ak=${mapAk}&callback=onBMapLoaded`}
+            strategy="afterInteractive"
+          />
+        ) : (
+          <Script
+            id="bmap-fallback"
+            strategy="afterInteractive"
+            dangerouslySetInnerHTML={{
+              __html: `console.warn('⚠️ [BMap] NEXT_PUBLIC_BAIDU_MAP_AK 未配置，地图功能不可用');`,
+            }}
+          />
+        )}
         <Navbar />
         <main className="flex-1">{children}</main>
       </body>
