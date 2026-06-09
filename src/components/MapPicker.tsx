@@ -330,28 +330,35 @@ export default function MapPicker({ open, onClose, onConfirm, initialAddress, in
             setMarker(newMk)
             setSelectedLat(pt.lat)
             setSelectedLng(pt.lng)
-            // 强化：地址回填 + 逆地理反查兜底
-            const populateFromGeo = (addressObj: any) => {
-              const safeNum = addressObj.streetNumber || ''
-              const addrStr = `${addressObj.province || ''}${addressObj.city || ''}${addressObj.district || ''}${addressObj.street || ''}${safeNum}`.replace(/undefined/gi, '').trim()
-              const finalAddr = addrStr || `${pt.lat.toFixed(4)}, ${pt.lng.toFixed(4)}`
-              console.log('🎯 [GEO_SYNC_DEBUG] 蓝钮反查地址成功:', finalAddr)
-              setSelectedAddress(finalAddr)
-              setSearchText(finalAddr)
-            }
-
-            if (r.address) {
-              populateFromGeo(r.address)
-            } else {
-              // SDK 没回 direct address, 额外调用逆地理
-              const gc = new (window as any).BMap.Geocoder()
-              gc.getLocation(pt, (rs: any) => {
-                if (rs?.addressComponents) {
-                  populateFromGeo(rs.addressComponents)
-                } else {
+            // POI 级精确定位：优先提取 surroundingPois[0].title 地标建筑名
+            const gc = new (window as any).BMap.Geocoder()
+            gc.getLocation(
+              pt,
+              (rs: any) => {
+                if (!mountedRef.current) return
+                const addComp = rs?.addressComponents
+                if (!addComp) {
                   setSelectedAddress(`${pt.lat.toFixed(4)}, ${pt.lng.toFixed(4)}`)
+                  return
                 }
-              })
+                const baseArea = `${addComp.province || ''}${addComp.city || ''}${addComp.district || ''}`.replace(/undefined/gi, '')
+                // 提取最近 POI 建筑名
+                const primaryPoi = rs?.surroundingPois?.[0]
+                const poiTitle = primaryPoi?.title || ''
+                let finalAddr: string
+                if (poiTitle) {
+                  finalAddr = `${baseArea}${poiTitle}`
+                  console.log('🏢 [POI_PRECISE_DEBUG] 精准地标捕获:', finalAddr, '| POI:', primaryPoi)
+                } else {
+                  const streetInfo = `${addComp.street || ''}${addComp.streetNumber || ''}`.replace(/undefined/gi, '')
+                  finalAddr = `${baseArea}${streetInfo}` || `${pt.lat.toFixed(4)}, ${pt.lng.toFixed(4)}`
+                }
+                finalAddr = finalAddr.replace(/undefined/gi, '').trim()
+                setSelectedAddress(finalAddr)
+                setSearchText(finalAddr)
+              },
+              { poiRadius: 100, numPois: 5 }
+            )
             }
           } else {
             console.warn('⚠️ [MAP_LOCATION_DEBUG] 高精度定位失败，状态码:', this.getStatus(), '— IP 定位降级')
@@ -364,22 +371,31 @@ export default function MapPicker({ open, onClose, onConfirm, initialAddress, in
               setMarker(newMk)
               setSelectedLat(pt.lat)
               setSelectedLng(pt.lng)
-              const populateFromGeo = (addressObj: any) => {
-                const safeNum = addressObj.streetNumber || ''
-                const addrStr = `${addressObj.province || ''}${addressObj.city || ''}${addressObj.district || ''}${addressObj.street || ''}${safeNum}`.replace(/undefined/gi, '').trim()
-                const finalAddr = addrStr || `${pt.lat.toFixed(4)}, ${pt.lng.toFixed(4)}`
-                console.log('🎯 [GEO_SYNC_DEBUG] IP降级-蓝钮反查地址成功:', finalAddr)
-                setSelectedAddress(finalAddr)
-                setSearchText(finalAddr)
-              }
-              if (r.address) {
-                populateFromGeo(r.address)
-              } else {
-                const gc = new (window as any).BMap.Geocoder()
-                gc.getLocation(pt, (rs: any) => {
-                  if (rs?.addressComponents) populateFromGeo(rs.addressComponents)
-                })
-              }
+              // POI 级精确定位（IP降级分支）
+              const gc = new (window as any).BMap.Geocoder()
+              gc.getLocation(
+                pt,
+                (rs: any) => {
+                  if (!mountedRef.current) return
+                  const addComp = rs?.addressComponents
+                  if (!addComp) return
+                  const baseArea = `${addComp.province || ''}${addComp.city || ''}${addComp.district || ''}`.replace(/undefined/gi, '')
+                  const primaryPoi = rs?.surroundingPois?.[0]
+                  const poiTitle = primaryPoi?.title || ''
+                  let finalAddr: string
+                  if (poiTitle) {
+                    finalAddr = `${baseArea}${poiTitle}`
+                    console.log('🏢 [POI_PRECISE_DEBUG] IP降级-精准地标:', finalAddr)
+                  } else {
+                    const streetInfo = `${addComp.street || ''}${addComp.streetNumber || ''}`.replace(/undefined/gi, '')
+                    finalAddr = `${baseArea}${streetInfo}` || `${pt.lat.toFixed(4)}, ${pt.lng.toFixed(4)}`
+                  }
+                  finalAddr = finalAddr.replace(/undefined/gi, '').trim()
+                  setSelectedAddress(finalAddr)
+                  setSearchText(finalAddr)
+                },
+                { poiRadius: 100, numPois: 5 }
+              )
             }
           }
         },
