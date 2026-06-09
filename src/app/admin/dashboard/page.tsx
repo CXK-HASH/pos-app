@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
+import MapPicker from '@/components/MapPicker'
 
 type Merchant = { id: number; name: string }
 type Category = { id: number; name: string }
@@ -24,6 +25,13 @@ export default function AdminDashboard() {
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editPrice, setEditPrice] = useState('')
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+
+  // 地址选择
+  const [showMap, setShowMap] = useState(false)
+  const [shopAddress, setShopAddress] = useState('')
+  const [shopLat, setShopLat] = useState<number>(34.757975)
+  const [shopLng, setShopLng] = useState<number>(113.665412)
+  const [isSyncing, setIsSyncing] = useState(false)
 
   const sessionHeaders = async (): Promise<Record<string, string>> => {
     const { data: { session } } = await supabase.auth.getSession()
@@ -66,9 +74,14 @@ export default function AdminDashboard() {
       setCategories(Array.isArray(cats) ? cats : [])
 
       if (merchantData?.merchant) {
-        setMerchant(merchantData.merchant)
+        const m = merchantData.merchant
+        setMerchant(m)
+        // 加载已有坐标
+        if (m.address) setShopAddress(m.address)
+        if (m.lat) setShopLat(Number(m.lat))
+        if (m.lng) setShopLng(Number(m.lng))
         // 自动加载菜品
-        const dishRes = await fetch(`/api/admin/dishes?merchant_id=${merchantData.merchant.id}`, { headers: hdrs })
+        const dishRes = await fetch(`/api/admin/dishes?merchant_id=${m.id}`, { headers: hdrs })
         const dishData = await dishRes.json()
         setDishes(Array.isArray(dishData) ? dishData : [])
       }
@@ -174,6 +187,13 @@ export default function AdminDashboard() {
           <div className="flex items-center gap-3">
             <span className="text-white font-bold text-lg">🍽️ 小龙虾外卖 · 商家控制台</span>
             <span className="text-orange-400 text-sm font-medium hidden sm:inline">🏪 {merchant.name}</span>
+            {/* 门店位置 */}
+            <button
+              onClick={() => setShowMap(true)}
+              className="hidden md:inline-flex items-center gap-1 text-xs text-gray-400 max-w-[180px] truncate cursor-pointer hover:text-orange-400 transition-colors"
+            >
+              📍{shopAddress ? <span className="truncate">{shopAddress}</span> : <span>设置门店位置</span>}
+            </button>
             <span className="text-gray-500 text-xs hidden lg:inline">| {user.email}</span>
           </div>
           <button
@@ -193,6 +213,43 @@ export default function AdminDashboard() {
           </div>
         </div>
       )}
+
+      {/* 门店位置选择弹窗 */}
+      <MapPicker
+        open={showMap}
+        onClose={() => setShowMap(false)}
+        onConfirm={async (address: string, lat: number, lng: number) => {
+          setShowMap(false)
+          setShopAddress(address)
+          setShopLat(lat)
+          setShopLng(lng)
+          setIsSyncing(true)
+          try {
+            const { data: { session } } = await supabase.auth.getSession()
+            const res = await fetch('/api/admin/my-shop', {
+              method: 'PATCH',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${session?.access_token || ''}`,
+              },
+              body: JSON.stringify({ address, lat, lng }),
+            })
+            const data = await res.json()
+            if (data.success) {
+              setMessage({ type: 'success', text: '✅ 门店位置已保存' })
+            } else {
+              setMessage({ type: 'error', text: '❌ ' + (data.error || '同步失败') })
+            }
+          } catch {
+            setMessage({ type: 'error', text: '❌ 网络异常，同步失败' })
+          } finally {
+            setIsSyncing(false)
+          }
+        }}
+        initialAddress={shopAddress}
+        initialLat={shopLat}
+        initialLng={shopLng}
+      />
 
       {/* 主体：左表单 + 右列表 */}
       <div className="max-w-6xl mx-auto px-6 py-5 pb-10 flex gap-6 flex-col lg:flex-row">
