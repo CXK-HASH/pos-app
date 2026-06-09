@@ -105,7 +105,7 @@ export default function HomeLoginPage() {
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
           <div className="text-5xl mb-3">🍽️</div>
-          <h1 className="text-2xl font-bold text-gray-900">小龙虾外卖</h1>
+          <h1 className="text-2xl font-bold text-gray-900">坤坤闪购</h1>
           <p className="text-sm text-gray-400 mt-1">
             {isSignUp ? '注册账号开启美食之旅' : '登录进入您的专属空间'}
           </p>

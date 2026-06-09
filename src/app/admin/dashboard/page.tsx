@@ -185,7 +185,7 @@ export default function AdminDashboard() {
       <header className="border-b border-gray-800">
         <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <span className="text-white font-bold text-lg">🍽️ 小龙虾外卖 · 商家控制台</span>
+            <span className="text-white font-bold text-lg">🍽️ 坤坤闪购 · 商家控制台</span>
             <span className="text-orange-400 text-sm font-medium hidden sm:inline">🏪 {merchant.name}</span>
             {/* 门店位置 */}
             <button

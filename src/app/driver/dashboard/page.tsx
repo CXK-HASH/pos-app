@@ -396,7 +396,7 @@ export default function DriverDashboard() {
       <header className="border-b border-gray-800">
         <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <span className="text-white font-bold text-lg">🚴 小龙虾配送 · 骑手大厅</span>
+            <span className="text-white font-bold text-lg">🚴 坤坤闪购 · 骑手大厅</span>
             <span className="text-gray-500 text-sm hidden sm:inline">{user.email}</span>
           </div>
           <div className="flex items-center gap-2">

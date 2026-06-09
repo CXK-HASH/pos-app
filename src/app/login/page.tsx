@@ -69,7 +69,7 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
           <div className="text-4xl mb-2">🍽️</div>
-          <h1 className="text-2xl font-bold text-gray-900">小龙虾外卖</h1>
+          <h1 className="text-2xl font-bold text-gray-900">坤坤闪购</h1>
           <p className="text-sm text-gray-400 mt-1">{isSignUp ? '创建新账号' : '登录您的账号'}</p>
         </div>
 

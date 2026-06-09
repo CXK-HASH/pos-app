@@ -104,7 +104,7 @@ export default function AdminSetup() {
         {/* 欢迎头 */}
         <div className="text-center mb-8">
           <div className="text-5xl mb-3">🎉</div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-1">欢迎入驻小龙虾外卖！</h1>
+          <h1 className="text-2xl font-bold text-gray-900 mb-1">欢迎入驻坤坤闪购！</h1>
           <p className="text-sm text-gray-500">
             请先设置您的店铺信息，开启属于您的在线餐饮生意
           </p>

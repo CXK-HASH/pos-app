@@ -57,7 +57,7 @@ export default function Navbar() {
         <div className="flex items-center gap-4 min-w-0">
           <Link href={role === 'customer' ? '/customer/home' : '/'} className="flex items-center gap-2 font-bold text-slate-800 text-lg shrink-0">
             <span>🍽️</span>
-            <span className="hidden sm:inline">小龙虾外卖</span>
+            <span className="hidden sm:inline">坤坤闪购</span>
           </Link>
           {/* 全角色通用地址选择入口 —— 交给各页面自行处理 */}
         </div>

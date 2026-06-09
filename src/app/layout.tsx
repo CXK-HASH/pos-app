@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "小龙虾外卖",
+  title: "坤坤闪购",
   description: "美味外卖，即刻送达",
 };
 
