@@ -271,15 +271,17 @@ export default function MapPicker({ open, onClose, onConfirm, initialAddress, in
     setShowSuggestions(false)
   }
 
-  // ==================== 当前定位 ====================
+  // ==================== 当前定位（高精度硬件模式）====================
   const handleLocate = () => {
     if (!map || !window.BMap) return
     try {
       const geolocation = new window.BMap.Geolocation()
+      geolocation.enableSDKLocation() // 优先使用硬件 SDK 定位（移动端生效）
       geolocation.getCurrentPosition(
-        (r: any) => {
-          if (r) {
+        function (this: any, r: any) {
+          if (this.getStatus() === (window as any).BMAP_STATUS_SUCCESS) {
             const pt = r.point
+            console.log('🎯 [MAP_LOCATION_DEBUG] 高精度定位坐标:', pt.lat, pt.lng, '地址:', r.address)
             map.clearOverlays()
             map.centerAndZoom(pt, 16)
             const newMk = new window.BMap.Marker(pt)
@@ -296,13 +298,38 @@ export default function MapPicker({ open, onClose, onConfirm, initialAddress, in
             } else {
               setSelectedAddress(`${pt.lat.toFixed(4)}, ${pt.lng.toFixed(4)}`)
             }
+          } else {
+            console.warn('⚠️ [MAP_LOCATION_DEBUG] 高精度定位失败，状态码:', this.getStatus(), '— 使用 IP 定位降级')
+            // 降级：仍然拿 r.point（IP 定位粗估坐标）
+            if (r && r.point) {
+              map.clearOverlays()
+              const pt = r.point
+              map.centerAndZoom(pt, 14)
+              const newMk = new window.BMap.Marker(pt)
+              map.addOverlay(newMk)
+              setMarker(newMk)
+              setSelectedLat(pt.lat)
+              setSelectedLng(pt.lng)
+              const addr = r.address
+              if (addr) {
+                const addrStr = `${addr.city}${addr.district}${addr.street}${addr.streetNumber}`
+                setSelectedAddress(addrStr)
+                setSearchText(addrStr)
+              } else {
+                setSelectedAddress(`${pt.lat.toFixed(4)}, ${pt.lng.toFixed(4)}`)
+              }
+            }
           }
         },
-        () => alert('定位失败，请检查定位权限'),
-        { enableHighAccuracy: true }
+        {
+          enableHighAccuracy: true, // 强制浏览器硬件 GPS / WiFi 高精度
+          timeout: 10000,            // 10 秒超时
+          maximumAge: 0,             // 不消费缓存位置
+        }
       )
-    } catch {
-      alert('定位异常')
+    } catch (err) {
+      console.error('❌ [MAP_LOCATION_DEBUG] 定位异常:', err)
+      alert('定位异常，请刷新后重试')
     }
   }
 
