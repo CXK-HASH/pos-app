@@ -14,7 +14,7 @@ function getClient() {
 /**
  * PUT /api/merchant/profile
  * 商家门店位置更新接口
- * 使用 PostgreSQL 自定义函数（rpc）彻底绕过 PostgREST schema cache
+ * 使用 Supabase JS Client + 新创建的列（address/lng/lat）
  */
 export async function PUT(request: Request) {
   try {
@@ -33,16 +33,13 @@ export async function PUT(request: Request) {
 
     const supabase = getClient()
 
-    // 直接用 rpc 调用自定义函数更新，完全绕过 PostgREST ORM
-    const { error } = await supabase.rpc('update_merchant_coords', {
-      p_merchant_id: merchantId,
-      p_address: safeAddress,
-      p_lat: safeLat,
-      p_lng: safeLng,
-    })
+    const { error } = await supabase
+      .from('merchants')
+      .update({ address: safeAddress, lng: safeLng, lat: safeLat })
+      .eq('id', merchantId)
 
     if (error) {
-      console.error('❌ [API_MERCHANT_PROFILE] RPC 执行失败:', error.message)
+      console.error('❌ [API_MERCHANT_PROFILE] 写入失败:', error.message)
       return NextResponse.json({ success: false, error: error.message }, { status: 500 })
     }
 
