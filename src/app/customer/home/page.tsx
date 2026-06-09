@@ -12,6 +12,9 @@ type Merchant = {
   name: string
   logo_url: string | null
   rating: number
+  lat: number | null
+  lng: number | null
+  address: string | null
 }
 
 type Dish = {
@@ -171,7 +174,9 @@ export default function CustomerHome() {
   })()
 
   // 搜索/分类 过滤商家
+  // 过滤掉没有坐标的商家（无法显示距离）
   const filteredMerchants = merchants.filter(m => {
+    if (!m.lat || !m.lng) return false
     // 文本过滤
     if (filterText) {
       const q = filterText.toLowerCase()
@@ -394,7 +399,19 @@ export default function CustomerHome() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-              {sortedMerchants.map(m => (
+              {sortedMerchants.map(m => {
+                // 距离计算（Haversine 公式）
+                const distance = (() => {
+                  if (!m.lat || !m.lng || !coords.lat || !coords.lng) return null
+                  const R = 6371 // km
+                  const dLat = (m.lat - coords.lat) * Math.PI / 180
+                  const dLng = (m.lng - coords.lng) * Math.PI / 180
+                  const a = Math.sin(dLat/2)**2 + Math.cos(coords.lat * Math.PI / 180) * Math.cos(m.lat * Math.PI / 180) * Math.sin(dLng/2)**2
+                  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))
+                  return R * c
+                })()
+
+                return (
                 <Link
                   key={m.id}
                   href={`/merchant/${m.id}`}
@@ -420,6 +437,16 @@ export default function CustomerHome() {
                           <span className="text-slate-300 mx-1">·</span>
                           <span className="text-slate-400 text-xs">月售 999+</span>
                         </div>
+                        {distance !== null && (
+                          <div className="mt-2 flex items-center gap-1.5">
+                            <span className="text-[10px] text-slate-400 bg-slate-50 px-2 py-0.5 rounded-full">
+                              📍 距您 {distance < 1 ? `${Math.round(distance * 1000)}m` : `${distance.toFixed(1)}km`}
+                            </span>
+                            {m.address && (
+                              <span className="text-[10px] text-slate-400 truncate max-w-[120px]">{m.address}</span>
+                            )}
+                          </div>
+                        )}
                         <div className="flex items-center gap-2 mt-2">
                           <span className="px-2 py-0.5 bg-orange-50 text-orange-600 text-[10px] font-medium rounded-full">满减</span>
                           <span className="px-2 py-0.5 bg-blue-50 text-blue-600 text-[10px] font-medium rounded-full">优惠</span>
@@ -432,7 +459,7 @@ export default function CustomerHome() {
                     </div>
                   </div>
                 </Link>
-              ))}
+              )})}
             </div>
           )}
         </div>
