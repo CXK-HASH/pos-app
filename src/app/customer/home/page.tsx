@@ -215,13 +215,33 @@ export default function CustomerHome() {
     setFilterText(searchQuery.trim())
   }, [searchQuery])
 
-  // === 地址修改（持久化到 localStorage） ===
+  // === 地址修改（持久化到 localStorage + 提取 adcode 联动天气） ===
   const handleAddressConfirm = (addr: string, lat: number, lng: number) => {
     setAddress(addr)
     setCoords({ lat, lng })
     localStorage.setItem('customer_address', addr)
     localStorage.setItem('customer_lng', String(lng))
     localStorage.setItem('customer_lat', String(lat))
+
+    // 逆地理取 adcode 写 localStorage，触发天气组件联动刷新
+    if (typeof window !== 'undefined' && (window as any).BMap) {
+      try {
+        const pt = new (window as any).BMap.Point(lng, lat)
+        const gc = new (window as any).BMap.Geocoder()
+        gc.getLocation(pt, (rs: any) => {
+          const adcode = rs?.addressComponents?.adcode
+          if (adcode) {
+            localStorage.setItem('customer_adcode', String(adcode))
+            console.log('🌤️ [WEATHER_LINKAGE] 写入 adcode:', adcode, '地址:', addr)
+            // 手动触 storage 事件，通知 WeatherWidget
+            window.dispatchEvent(new Event('storage'))
+          }
+        })
+      } catch (err) {
+        console.warn('🌤️ [WEATHER_LINKAGE] 逆地理取 adcode 失败:', err)
+      }
+    }
+
     setToast('📍 地址已变更，已为您刷新附近热门外卖')
     setShowAddressModal(false)
   }
@@ -263,7 +283,7 @@ export default function CustomerHome() {
       <div className="sticky top-14 z-40 bg-white/60 backdrop-blur-md border-b border-slate-100">
         <div className="max-w-5xl mx-auto px-6 py-3 flex items-center gap-2">
           {/* 天气组件 */}
-          <WeatherWidget city={(typeof window !== 'undefined' && localStorage.getItem('customer_city')) || undefined} />
+          <WeatherWidget />
 
           {/* 地址切换 */}
           <button

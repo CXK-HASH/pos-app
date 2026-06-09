@@ -8,27 +8,6 @@ interface WeatherData {
   wind: string
 }
 
-interface WeatherWidgetProps {
-  city?: string
-}
-
-// ——— 城市 → 行政编码映射（主战场郑州及周围） ———
-const CITY_CODE_MAP: Record<string, string> = {
-  '郑州市': '410100',
-  '郑州': '410100',
-  '洛阳': '410300',
-  '开封': '410200',
-  '新乡': '410700',
-  '许昌': '411000',
-  '北京': '110000',
-  '上海': '310000',
-  '广州': '440100',
-  '深圳': '440300',
-}
-
-// 默认郑州行政编码
-const DEFAULT_CITY_CODE = '410100'
-
 // 天气图标映射
 const WEATHER_ICONS: Record<string, string> = {
   '晴': '☀️',
@@ -54,24 +33,24 @@ function getWeatherIcon(text: string): string {
   return '🌤️'
 }
 
-export default function WeatherWidget({ city: propCity }: WeatherWidgetProps) {
+export default function WeatherWidget() {
   const [weather, setWeather] = useState<WeatherData | null>(null)
   const [loading, setLoading] = useState(true)
 
   const fetchWeather = useCallback(async () => {
     setLoading(true)
 
-    // 确定城市编码
-    const cityName = (propCity || (typeof window !== 'undefined' && localStorage.getItem('customer_city')) || '郑州市').replace(/市$/, '')
-    const districtId = CITY_CODE_MAP[cityName] || CITY_CODE_MAP[`${cityName}市`] || DEFAULT_CITY_CODE
+    // 从 localStorage 读取 adcode（用户定位联动）
+    const adcode = typeof window !== 'undefined' ? localStorage.getItem('customer_adcode') : null
+    const districtId = adcode || '410100' // 兜底郑州
 
     try {
       const url = `/api/weather?district_id=${districtId}`
-      console.log('🌤️ [WEATHER_DEBUG] 请求代理:', url)
+      console.log('🌤️ [WEATHER_LINKAGE] 请求天气 adcode:', districtId)
       const res = await fetch(url)
       const json = await res.json()
 
-      console.log('🌤️ [WEATHER_DEBUG] 响应:', json)
+      console.log('🌤️ [WEATHER_LINKAGE] 响应:', json)
 
       if (json.status === 0 && json.result?.now) {
         const now = json.result.now
@@ -81,19 +60,26 @@ export default function WeatherWidget({ city: propCity }: WeatherWidgetProps) {
           wind: now.wind_dir || '',
         })
       } else {
-        console.warn('❄️ [WEATHER_DEBUG] API 返回异常:', json)
+        console.warn('❄️ [WEATHER_LINKAGE] API 返回异常:', json)
       }
     } catch (err) {
-      console.error('❌ [WEATHER_DEBUG] 网络请求异常:', err)
+      console.error('❌ [WEATHER_LINKAGE] 网络请求异常:', err)
     } finally {
       setLoading(false)
     }
-  }, [propCity])
+  }, [])
 
   useEffect(() => {
-    // 等页面加载稳定后再请求
-    const timer = setTimeout(fetchWeather, 800)
-    return () => clearTimeout(timer)
+    // 初始加载 + 监听 localStorage 变化（选址弹窗确认后手动触发的 storage 事件）
+    const timer = setTimeout(fetchWeather, 600)
+
+    const handleStorage = () => fetchWeather()
+    window.addEventListener('storage', handleStorage)
+
+    return () => {
+      clearTimeout(timer)
+      window.removeEventListener('storage', handleStorage)
+    }
   }, [fetchWeather])
 
   // 加载中骨架
@@ -106,7 +92,7 @@ export default function WeatherWidget({ city: propCity }: WeatherWidgetProps) {
     )
   }
 
-  // 空数据熔断 — 静默不渲染
+  // 空数据熔断
   if (!weather) return null
 
   const icon = getWeatherIcon(weather.text)
