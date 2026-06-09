@@ -116,12 +116,24 @@ export default function MapPicker({ open, onClose, onConfirm, initialAddress, in
       return
     }
 
-    // 用 BMap.LocalSearch 检索
+    // 用 BMap.LocalSearch 检索，传空字符串表示全国范围
+    // 注意：不能传 '中国'，百度 API 需要城市名或空字符串
     try {
-      const local = new window.BMap.LocalSearch('中国', {
+      const local = new window.BMap.LocalSearch('', {
         pageCapacity: 6,
-        onSearchComplete: (results: any) => {
-          if (local.getStatus() === (window as any).BMAP_STATUS_SUCCESS) {
+        onSearchComplete: () => {
+          const status = local.getStatus()
+          console.log('📡 [MAP_POI_DEBUG] 百度地图检索状态码 (Status):', status, '关键词:', keyword)
+
+          // BMAP_STATUS_SUCCESS = 0
+          if (status === 0) {
+            const results = local.getResults()
+            if (!results) {
+              console.warn('📡 [MAP_POI_DEBUG] results 为空')
+              setSuggestions([])
+              setShowSuggestions(false)
+              return
+            }
             const poiList: PoiItem[] = []
             for (let i = 0; i < results.getCurrentNumPois(); i++) {
               const poi = results.getPoi(i)
@@ -132,6 +144,7 @@ export default function MapPicker({ open, onClose, onConfirm, initialAddress, in
                 lng: poi.point.lng,
               })
             }
+            console.log('📥 [MAP_POI_DEBUG] 成功抓取 POI 候选集:', poiList)
             if (poiList.length > 0) {
               setSuggestions(poiList)
               setShowSuggestions(true)
@@ -139,11 +152,16 @@ export default function MapPicker({ open, onClose, onConfirm, initialAddress, in
               setSuggestions([])
               setShowSuggestions(false)
             }
+          } else {
+            console.error('❌ [MAP_POI_DEBUG] 百度检索失败，请自查 AK 类型或网络！错误状态码:', status, '关键词:', keyword)
+            setSuggestions([])
+            setShowSuggestions(false)
           }
         },
       })
       local.search(keyword.trim())
-    } catch {
+    } catch (err) {
+      console.error('❌ [MAP_POI_DEBUG] searchPoi 异常:', err)
       setSuggestions([])
       setShowSuggestions(false)
     }
@@ -300,7 +318,8 @@ export default function MapPicker({ open, onClose, onConfirm, initialAddress, in
               {showSuggestions && suggestions.length > 0 && (
                 <div
                   ref={panelRef}
-                  className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg z-[80] max-h-[240px] overflow-y-auto"
+                  className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg z-[9999] max-h-[240px] overflow-y-auto"
+                style={{ position: 'absolute', zIndex: 9999 }}
                 >
                   {suggestions.map((poi, idx) => (
                     <div
