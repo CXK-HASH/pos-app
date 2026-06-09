@@ -68,40 +68,63 @@ export default function CustomerHome() {
   const [showAddressModal, setShowAddressModal] = useState(false)
   const [toast, setToast] = useState('')
 
-  // 初始化地址（localStorage > 自动定位 > 静默空）
+  // 初始化地址（服务端 -> localStorage -> 自动定位）
   useEffect(() => {
-    const savedAddr = localStorage.getItem('customer_address')
-    const savedLng = localStorage.getItem('customer_lng')
-    const savedLat = localStorage.getItem('customer_lat')
-    if (savedAddr && savedLat && savedLng) {
-      setAddress(savedAddr)
-      setCoords({ lat: Number(savedLat), lng: Number(savedLng) })
-      return
-    }
-
-    // 无历史记录，尝试自动定位
-    if (!navigator.geolocation) return
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const lat = pos.coords.latitude
-        const lng = pos.coords.longitude
-        setCoords({ lat, lng })
-        if (typeof window !== 'undefined' && (window as any).BMap) {
-          const pt = new (window as any).BMap.Point(lng, lat)
-          const gc = new (window as any).BMap.Geocoder()
-          gc.getLocation(pt, (rs: any) => {
-            if (rs?.address) {
-              setAddress(rs.address)
-              localStorage.setItem('customer_address', rs.address)
-              localStorage.setItem('customer_lng', String(lng))
-              localStorage.setItem('customer_lat', String(lat))
-            }
+    // 1. 优先从服务器拉取（跨设备、换浏览器都能恢复）
+    ;(async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session?.access_token) {
+        try {
+          const res = await fetch('/api/user/address', {
+            headers: { 'Authorization': `Bearer ${session.access_token}` }
           })
-        }
-      },
-      () => {},
-      { enableHighAccuracy: true, timeout: 5000, maximumAge: 300000 }
-    )
+          const serverData = await res.json()
+          if (serverData?.address && serverData.lng && serverData.lat) {
+            setAddress(serverData.address)
+            setCoords({ lat: Number(serverData.lat), lng: Number(serverData.lng) })
+            localStorage.setItem('customer_address', serverData.address)
+            localStorage.setItem('customer_lng', String(serverData.lng))
+            localStorage.setItem('customer_lat', String(serverData.lat))
+            if (serverData.adcode) localStorage.setItem('customer_adcode', String(serverData.adcode))
+            return
+          }
+        } catch { /* 静默降级到 localStorage */ }
+      }
+
+      // 2. localStorage 兜底
+      const savedAddr = localStorage.getItem('customer_address')
+      const savedLng = localStorage.getItem('customer_lng')
+      const savedLat = localStorage.getItem('customer_lat')
+      if (savedAddr && savedLat && savedLng) {
+        setAddress(savedAddr)
+        setCoords({ lat: Number(savedLat), lng: Number(savedLng) })
+        return
+      }
+
+      // 3. 无历史记录，尝试自动定位
+      if (!navigator.geolocation) return
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const lat = pos.coords.latitude
+          const lng = pos.coords.longitude
+          setCoords({ lat, lng })
+          if (typeof window !== 'undefined' && (window as any).BMap) {
+            const pt = new (window as any).BMap.Point(lng, lat)
+            const gc = new (window as any).BMap.Geocoder()
+            gc.getLocation(pt, (rs: any) => {
+              if (rs?.address) {
+                setAddress(rs.address)
+                localStorage.setItem('customer_address', rs.address)
+                localStorage.setItem('customer_lng', String(lng))
+                localStorage.setItem('customer_lat', String(lat))
+              }
+            })
+          }
+        },
+        () => {},
+        { enableHighAccuracy: true, timeout: 5000, maximumAge: 300000 }
+      )
+    })()
   }, [])
 
   // AI 抽屉
@@ -220,13 +243,27 @@ export default function CustomerHome() {
     setFilterText(searchQuery.trim())
   }, [searchQuery])
 
-  // === 地址修改（持久化到 localStorage + 提取 adcode 联动天气） ===
+  // === 地址修改（持久化到 localStorage + 服务端 + 提取 adcode 联动天气） ===
   const handleAddressConfirm = (addr: string, lat: number, lng: number) => {
     setAddress(addr)
     setCoords({ lat, lng })
     localStorage.setItem('customer_address', addr)
     localStorage.setItem('customer_lng', String(lng))
     localStorage.setItem('customer_lat', String(lat))
+
+    // 保存到服务器（跨设备持久化）
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.access_token) {
+        fetch('/api/user/address', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({ address: addr, lng, lat }),
+        }).catch(() => {})
+      }
+    })
 
     // 逆地理取 adcode 写 localStorage，触发天气组件联动刷新
     if (typeof window !== 'undefined' && (window as any).BMap) {
