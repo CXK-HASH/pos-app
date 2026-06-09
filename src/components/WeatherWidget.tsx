@@ -3,17 +3,34 @@
 import { useEffect, useState, useCallback } from 'react'
 
 interface WeatherData {
-  text: string   // 天气情况：晴、多云、阴、雨等
-  temp: string   // 温度，如 "28℃"
-  wind: string   // 风向风力，如 "南风3-4级"
+  text: string
+  temp: string
+  wind: string
 }
 
 interface WeatherWidgetProps {
-  city?: string // 可选，不传则使用 localStorage 推断
+  city?: string
 }
 
+// ——— 城市 → 行政编码映射（主战场郑州及周围） ———
+const CITY_CODE_MAP: Record<string, string> = {
+  '郑州市': '410100',
+  '郑州': '410100',
+  '洛阳': '410300',
+  '开封': '410200',
+  '新乡': '410700',
+  '许昌': '411000',
+  '北京': '110000',
+  '上海': '310000',
+  '广州': '440100',
+  '深圳': '440300',
+}
+
+// 默认郑州行政编码
+const DEFAULT_CITY_CODE = '410100'
+
 // 天气图标映射
-const weatherIconMap: Record<string, string> = {
+const WEATHER_ICONS: Record<string, string> = {
   '晴': '☀️',
   '多云': '⛅',
   '阴': '☁️',
@@ -28,94 +45,79 @@ const weatherIconMap: Record<string, string> = {
 }
 
 function getWeatherIcon(text: string): string {
-  // 模糊匹配
-  for (const [key, emoji] of Object.entries(weatherIconMap)) {
+  for (const [key, emoji] of Object.entries(WEATHER_ICONS)) {
     if (text.includes(key)) return emoji
   }
   if (text.includes('雨')) return '🌧️'
   if (text.includes('云')) return '⛅'
   if (text.includes('晴')) return '☀️'
-  return '🌤️' // 默认
+  return '🌤️'
 }
 
 export default function WeatherWidget({ city: propCity }: WeatherWidgetProps) {
   const [weather, setWeather] = useState<WeatherData | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState(false)
+  const [loading, setLoading] = useState(true)
 
-  const fetchWeather = useCallback(async (cityName: string) => {
-    if (!window.BMap || !cityName) return
+  const fetchWeather = useCallback(async () => {
     setLoading(true)
-    setError(false)
+
+    // 确定城市编码
+    const cityName = (propCity || (typeof window !== 'undefined' && localStorage.getItem('customer_city')) || '郑州市').replace(/市$/, '')
+    const districtId = CITY_CODE_MAP[cityName] || CITY_CODE_MAP[`${cityName}市`] || DEFAULT_CITY_CODE
 
     try {
-      const Weather = (window as any).BMap.Weather
-      if (!Weather) {
-        // 百度 3.0 可能不包含 Weather 类，换个方案
-        console.warn('❄️ [WEATHER_DEBUG] BMap.Weather 不可用，跳过')
-        setError(true)
-        setLoading(false)
-        return
+      const url = `/api/weather?district_id=${districtId}`
+      console.log('🌤️ [WEATHER_DEBUG] 请求代理:', url)
+      const res = await fetch(url)
+      const json = await res.json()
+
+      console.log('🌤️ [WEATHER_DEBUG] 响应:', json)
+
+      if (json.status === 0 && json.result?.now) {
+        const now = json.result.now
+        setWeather({
+          text: now.text || '未知',
+          temp: now.temp + '°C',
+          wind: now.wind_dir || '',
+        })
+      } else {
+        console.warn('❄️ [WEATHER_DEBUG] API 返回异常:', json)
       }
-      const weatherInstance = new Weather()
-      weatherInstance.getWeatherByDistrictName(cityName, (results: any) => {
-        if (results?.currentWeather) {
-          const data = results.currentWeather
-          console.log('🌤️ [WEATHER_DEBUG] 实时天气:', cityName, data)
-          setWeather({
-            text: data.text || '未知',
-            temp: data.date || '--',
-            wind: data.wind || '',
-          })
-        } else {
-          console.warn('❄️ [WEATHER_DEBUG] 天气结果为空:', cityName, results)
-          setError(true)
-        }
-        setLoading(false)
-      })
     } catch (err) {
-      console.error('❌ [WEATHER_DEBUG] 天气请求异常:', err)
-      setError(true)
+      console.error('❌ [WEATHER_DEBUG] 网络请求异常:', err)
+    } finally {
       setLoading(false)
     }
-  }, [])
+  }, [propCity])
 
-  // 读取城市名（优先 prop > localStorage > 默认郑州）
   useEffect(() => {
-    const city = propCity || (typeof window !== 'undefined' && localStorage.getItem('customer_city')) || '郑州市'
-    // 等 BMap 就绪
-    const checkBMap = () => {
-      if (typeof window !== 'undefined' && (window as any).BMap) {
-        fetchWeather(city)
-      } else {
-        setTimeout(checkBMap, 300)
-      }
-    }
-    // 延迟执行，确保 SDK 加载
-    setTimeout(checkBMap, 500)
-  }, [propCity, fetchWeather])
+    // 等页面加载稳定后再请求
+    const timer = setTimeout(fetchWeather, 800)
+    return () => clearTimeout(timer)
+  }, [fetchWeather])
 
   // 加载中骨架
   if (loading) {
     return (
-      <div className="flex items-center gap-1 text-xs text-slate-400 shrink-0">
-        <span className="w-4 h-4 bg-slate-200 rounded-full animate-pulse" />
-        <span className="w-8 h-3 bg-slate-200 rounded animate-pulse" />
+      <div className="flex items-center gap-1.5 shrink-0">
+        <span className="w-4 h-4 rounded-full bg-slate-200 animate-pulse" />
+        <span className="w-10 h-3 bg-slate-200 rounded animate-pulse" />
       </div>
     )
   }
 
-  // 失败/空数据 — 静默不渲染
-  if (error || !weather) {
-    return null
-  }
+  // 空数据熔断 — 静默不渲染
+  if (!weather) return null
 
   const icon = getWeatherIcon(weather.text)
 
   return (
-    <div className="flex items-center gap-1.5 shrink-0 text-xs whitespace-nowrap" title={`${weather.text} | ${weather.wind}`}>
+    <div
+      className="flex items-center gap-1.5 shrink-0 text-xs whitespace-nowrap bg-slate-100/80 px-2.5 py-1 rounded-full font-semibold"
+      title={`${weather.text} | ${weather.wind}`}
+    >
       <span className="text-sm">{icon}</span>
-      <span className="font-bold text-slate-800">{weather.temp}</span>
+      <span className="text-slate-800 font-bold">{weather.temp}</span>
       <span className="text-slate-400 hidden sm:inline">{weather.text}</span>
     </div>
   )
