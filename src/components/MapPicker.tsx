@@ -330,14 +330,28 @@ export default function MapPicker({ open, onClose, onConfirm, initialAddress, in
             setMarker(newMk)
             setSelectedLat(pt.lat)
             setSelectedLng(pt.lng)
-            const addr = r.address
-            if (addr) {
-              const safeNum = addr.streetNumber || ''
-              const addrStr = `${addr.city || ''}${addr.district || ''}${addr.street || ''}${safeNum}`.replace(/undefined/gi, '').trim()
-              setSelectedAddress(addrStr)
-              setSearchText(addrStr)
+            // 强化：地址回填 + 逆地理反查兜底
+            const populateFromGeo = (addressObj: any) => {
+              const safeNum = addressObj.streetNumber || ''
+              const addrStr = `${addressObj.province || ''}${addressObj.city || ''}${addressObj.district || ''}${addressObj.street || ''}${safeNum}`.replace(/undefined/gi, '').trim()
+              const finalAddr = addrStr || `${pt.lat.toFixed(4)}, ${pt.lng.toFixed(4)}`
+              console.log('🎯 [GEO_SYNC_DEBUG] 蓝钮反查地址成功:', finalAddr)
+              setSelectedAddress(finalAddr)
+              setSearchText(finalAddr)
+            }
+
+            if (r.address) {
+              populateFromGeo(r.address)
             } else {
-              setSelectedAddress(`${pt.lat.toFixed(4)}, ${pt.lng.toFixed(4)}`)
+              // SDK 没回 direct address, 额外调用逆地理
+              const gc = new (window as any).BMap.Geocoder()
+              gc.getLocation(pt, (rs: any) => {
+                if (rs?.addressComponents) {
+                  populateFromGeo(rs.addressComponents)
+                } else {
+                  setSelectedAddress(`${pt.lat.toFixed(4)}, ${pt.lng.toFixed(4)}`)
+                }
+              })
             }
           } else {
             console.warn('⚠️ [MAP_LOCATION_DEBUG] 高精度定位失败，状态码:', this.getStatus(), '— IP 定位降级')
@@ -350,12 +364,21 @@ export default function MapPicker({ open, onClose, onConfirm, initialAddress, in
               setMarker(newMk)
               setSelectedLat(pt.lat)
               setSelectedLng(pt.lng)
-              const addr = r.address
-              if (addr) {
-                const safeNum = addr.streetNumber || ''
-                const addrStr = `${addr.city || ''}${addr.district || ''}${addr.street || ''}${safeNum}`.replace(/undefined/gi, '').trim()
-                setSelectedAddress(addrStr)
-                setSearchText(addrStr)
+              const populateFromGeo = (addressObj: any) => {
+                const safeNum = addressObj.streetNumber || ''
+                const addrStr = `${addressObj.province || ''}${addressObj.city || ''}${addressObj.district || ''}${addressObj.street || ''}${safeNum}`.replace(/undefined/gi, '').trim()
+                const finalAddr = addrStr || `${pt.lat.toFixed(4)}, ${pt.lng.toFixed(4)}`
+                console.log('🎯 [GEO_SYNC_DEBUG] IP降级-蓝钮反查地址成功:', finalAddr)
+                setSelectedAddress(finalAddr)
+                setSearchText(finalAddr)
+              }
+              if (r.address) {
+                populateFromGeo(r.address)
+              } else {
+                const gc = new (window as any).BMap.Geocoder()
+                gc.getLocation(pt, (rs: any) => {
+                  if (rs?.addressComponents) populateFromGeo(rs.addressComponents)
+                })
               }
             }
           }
