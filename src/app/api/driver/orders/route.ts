@@ -43,6 +43,7 @@ export async function GET(request: Request) {
   const safeData = (data || []).map((o) => ({
     ...o,
     total_price: Number(o.total_price),
+    driver_fee: Number(o.driver_fee || 0),
   }))
 
   return NextResponse.json(safeData)

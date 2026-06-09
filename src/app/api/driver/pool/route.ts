@@ -43,17 +43,44 @@ export async function GET() {
     )
   }
 
+  /** Haversine 距离（km） */
+  function calcDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
+    const R = 6371
+    const dLat = (lat2 - lat1) * Math.PI / 180
+    const dLng = (lng2 - lng1) * Math.PI / 180
+    const a = Math.sin(dLat/2)**2 +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng/2)**2
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+  }
+
+  /** 配送费：起步 1km=2 元，之后每 0.5km + 1 元 */
+  function calcDriverFee(km: number): number {
+    if (km <= 0) return 2
+    return 2 + Math.ceil(Math.max(0, km - 1) / 0.5)
+  }
+
   const enriched = orders.map((o) => {
     const merchant = o.merchant_id ? merchantMap.get(o.merchant_id) : undefined
+    const mLat = o.merchant_lat ?? merchant?.lat ?? null
+    const mLng = o.merchant_lng ?? merchant?.lng ?? null
+    const cLat = o.consumer_lat ?? null
+    const cLng = o.consumer_lng ?? null
+
+    // 预估配送费（实时计算，与抢单时的逻辑一致）
+    let estimatedFee = 2
+    if (mLat && mLng && cLat && cLng) {
+      const dist = calcDistance(Number(mLat), Number(mLng), Number(cLat), Number(cLng))
+      estimatedFee = calcDriverFee(dist)
+    }
+
     return {
       ...o,
       total_price: Number(o.total_price),
-      // 如果订单还没空间快照，从 merchants 表补
+      driver_fee: estimatedFee,
       merchant_address: o.merchant_address || merchant?.address || null,
-      merchant_lat: o.merchant_lat ?? merchant?.lat ?? null,
-      merchant_lng: o.merchant_lng ?? merchant?.lng ?? null,
+      merchant_lat: mLat,
+      merchant_lng: mLng,
       merchant_name: merchant?.name || '未知商家',
-      // consumer_address 由前端提交时写入
     }
   })
 
