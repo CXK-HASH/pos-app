@@ -32,8 +32,9 @@ export default function MapPicker({ open, onClose, onConfirm, initialAddress, in
   const [map, setMap] = useState<any>(null)
   const [marker, setMarker] = useState<any>(null)
   const [selectedAddress, setSelectedAddress] = useState(initialAddress || '')
-  const [selectedLat, setSelectedLat] = useState(initialLat || 23.128)
-  const [selectedLng, setSelectedLng] = useState(initialLng || 113.262)
+  // 纯净化：不设固定回退坐标，由父组件传初始值；不传则等用户定位/搜索
+  const [selectedLat, setSelectedLat] = useState(initialLat || 0)
+  const [selectedLng, setSelectedLng] = useState(initialLng || 0)
   const [searchText, setSearchText] = useState(initialAddress || '')
 
   // POI 联想
@@ -88,7 +89,10 @@ export default function MapPicker({ open, onClose, onConfirm, initialAddress, in
     const initTimer = setTimeout(() => {
       if (!mountedRef.current) return
 
-      const defaultPoint = new (window as any).BMap.Point(selectedLng, selectedLat)
+      // 未传坐标时兜底到郑州市中心
+      const lng = selectedLng || 113.625
+      const lat = selectedLat || 34.746
+      const defaultPoint = new (window as any).BMap.Point(lng, lat)
       const bm = new (window as any).BMap.Map(mapRef.current)
       bm.centerAndZoom(defaultPoint, 15)
       bm.enableScrollWheelZoom(true)

@@ -58,14 +58,24 @@ export default function CustomerHome() {
   const [searchQuery, setSearchQuery] = useState('')
   const [filterText, setFilterText] = useState('')
 
-  // 地址
-  const [address, setAddress] = useState('天河城')
-  const [coords, setCoords] = useState({ lat: 23.128, lng: 113.262 })
+  // 地址（优先读取 localStorage 持久化历史）
+  const [address, setAddress] = useState('')
+  const [coords, setCoords] = useState({ lat: 0, lng: 0 })
   const [showAddressModal, setShowAddressModal] = useState(false)
   const [toast, setToast] = useState('')
 
-  // 自动定位（单次，但逆地理只跑一次不用防抖）
+  // 初始化地址（localStorage > 自动定位 > 静默空）
   useEffect(() => {
+    const savedAddr = localStorage.getItem('customer_address')
+    const savedLng = localStorage.getItem('customer_lng')
+    const savedLat = localStorage.getItem('customer_lat')
+    if (savedAddr && savedLat && savedLng) {
+      setAddress(savedAddr)
+      setCoords({ lat: Number(savedLat), lng: Number(savedLng) })
+      return
+    }
+
+    // 无历史记录，尝试自动定位
     if (!navigator.geolocation) return
     navigator.geolocation.getCurrentPosition(
       (pos) => {
@@ -76,12 +86,17 @@ export default function CustomerHome() {
           const pt = new (window as any).BMap.Point(lng, lat)
           const gc = new (window as any).BMap.Geocoder()
           gc.getLocation(pt, (rs: any) => {
-            if (rs?.address) setAddress(rs.address)
+            if (rs?.address) {
+              setAddress(rs.address)
+              localStorage.setItem('customer_address', rs.address)
+              localStorage.setItem('customer_lng', String(lng))
+              localStorage.setItem('customer_lat', String(lat))
+            }
           })
         }
       },
       () => {},
-      { enableHighAccuracy: true, timeout: 5000, maximumAge: 300000 } // 允许缓存 5 分钟，减少 GPS 调用
+      { enableHighAccuracy: true, timeout: 5000, maximumAge: 300000 }
     )
   }, [])
 
@@ -199,10 +214,13 @@ export default function CustomerHome() {
     setFilterText(searchQuery.trim())
   }, [searchQuery])
 
-  // === 地址修改 ===
+  // === 地址修改（持久化到 localStorage） ===
   const handleAddressConfirm = (addr: string, lat: number, lng: number) => {
     setAddress(addr)
     setCoords({ lat, lng })
+    localStorage.setItem('customer_address', addr)
+    localStorage.setItem('customer_lng', String(lng))
+    localStorage.setItem('customer_lat', String(lat))
     setToast('📍 地址已变更，已为您刷新附近热门外卖')
     setShowAddressModal(false)
   }
