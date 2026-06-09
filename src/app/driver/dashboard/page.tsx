@@ -177,18 +177,30 @@ export default function DriverDashboard() {
     setActionLoading(null)
   }
 
+  /** 百度地图外跳导航：取餐/送餐双段 */
   const handleNavigate = (order: Order, type: 'pickup' | 'deliver') => {
-    // 如果骑手没有实际坐标，无法导航
-    if (!order.merchant_lat || !order.merchant_lng) {
-      alert('商家位置信息不全')
+    if (!driverLat || !driverLng) {
+      alert('骑手位置未获取，请等待定位完成')
       return
     }
-    if (type === 'deliver' && (!order.consumer_lat || !order.consumer_lng)) {
-      alert('送餐位置信息不全')
-      return
+
+    if (type === 'pickup') {
+      if (!order.merchant_lat || !order.merchant_lng) {
+        alert('商家位置信息不全')
+        return
+      }
+      const url = `https://api.map.baidu.com/direction?origin=${driverLat},${driverLng}&destination=${order.merchant_lat},${order.merchant_lng}&mode=riding&region=全国&output=html&src=webapp.delivery.posapp`
+      console.log('🚀 [BAIDU_MAP_NAV] 导航取餐:', url)
+      window.open(url, '_blank')
+    } else {
+      if (!order.consumer_lat || !order.consumer_lng) {
+        alert('送餐位置信息不全')
+        return
+      }
+      const url = `https://api.map.baidu.com/direction?origin=${driverLat},${driverLng}&destination=${order.consumer_lat},${order.consumer_lng}&mode=riding&region=全国&output=html&src=webapp.delivery.posapp`
+      console.log('🚀 [BAIDU_MAP_NAV] 导航送餐:', url)
+      window.open(url, '_blank')
     }
-    setNavOrder(order)
-    setShowNav(true)
   }
 
   if (!user) {
@@ -306,7 +318,7 @@ export default function DriverDashboard() {
             onClick={() => handleNavigate(order, 'pickup')}
             className="w-full py-2.5 bg-gradient-to-r from-blue-600 to-cyan-600 text-white font-semibold rounded-xl hover:opacity-90 transition-all flex items-center justify-center gap-2 mb-2"
           >
-            🗺️ 导航到商家
+            🗺️ 百度导航取餐
           </button>
         )}
 
@@ -338,13 +350,24 @@ export default function DriverDashboard() {
         )}
 
         {order.status === 'shipping' && (
-          <button
-            onClick={() => handleAction(order.id, { status: 'completed' })}
-            disabled={isLoading}
-            className="w-full py-2.5 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-semibold rounded-xl hover:opacity-90 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-          >
-            {isLoading ? '处理中...' : '🏁 已送达顾客'}
-          </button>
+          <>
+            {/* 送餐导航 */}
+            {order.consumer_lat && order.consumer_lng && (
+              <button
+                onClick={() => handleNavigate(order, 'deliver')}
+                className="w-full py-2.5 bg-gradient-to-r from-orange-500 to-red-500 text-white font-semibold rounded-xl hover:opacity-90 transition-all flex items-center justify-center gap-2 mb-2"
+              >
+                🚴 百度导航送餐
+              </button>
+            )}
+            <button
+              onClick={() => handleAction(order.id, { status: 'completed' })}
+              disabled={isLoading}
+              className="w-full py-2.5 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-semibold rounded-xl hover:opacity-90 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {isLoading ? '处理中...' : '🏁 已送达顾客'}
+            </button>
+          </>
         )}
 
         {order.status === 'processing' && !order.meal_prepared && !order.driver_arrived && (
