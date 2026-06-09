@@ -405,7 +405,6 @@ export default function MapPicker({ open, onClose, onConfirm, initialAddress, in
               },
               { poiRadius: 100, numPois: 5 }
             )
-            }
           } else {
             console.warn('⚠️ [MAP_LOCATION_DEBUG] 高精度定位失败，状态码:', this.getStatus(), '— IP 定位降级')
             if (r && r.point && mountedRef.current) {
