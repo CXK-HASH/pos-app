@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import NavigationMap from '@/components/NavigationMap'
+import MapPicker from '@/components/MapPicker'
 import { getDistance, formatDistance } from '@/lib/distance'
 
 type Order = {
@@ -48,6 +49,9 @@ export default function DriverDashboard() {
   const [driverAddress, setDriverAddress] = useState<string>('正在定位...')
   const [locationReady, setLocationReady] = useState(false)
   const locationInited = useRef(false)
+
+  // 地址弹窗
+  const [showMap, setShowMap] = useState(false)
 
   // 导航状态
   const [navOrder, setNavOrder] = useState<Order | null>(null)
@@ -372,11 +376,16 @@ export default function DriverDashboard() {
               待抢 <span className="text-yellow-400 font-bold">{pool.length}</span>
               &nbsp;·&nbsp; 配送中 <span className="text-blue-400 font-bold">{myOrders.length}</span>
             </span>
-            {/* 当前位置 */}
+            {/* 当前位置 — 全角色可点击唤起选址弹窗 */}
             {locationReady && (
-              <span className="hidden md:inline text-xs text-gray-600 max-w-[200px] truncate" title={driverAddress}>
-                📍 {driverAddress}
-              </span>
+              <button
+                onClick={() => setShowMap(true)}
+                className="hidden md:inline-flex items-center gap-1 text-xs text-gray-600 max-w-[200px] truncate cursor-pointer hover:text-orange-500 transition-colors"
+                title={driverAddress}
+              >
+                <span>📍</span>
+                <span className="truncate">{driverAddress}</span>
+              </button>
             )}
             <button
               onClick={() => supabase.auth.signOut().then(() => router.push('/'))}
@@ -386,6 +395,36 @@ export default function DriverDashboard() {
             </button>
           </div>
         </div>
+
+        {/* ===== 百度地图地址选择弹窗 ===== */}
+        <MapPicker
+          open={showMap}
+          onClose={() => setShowMap(false)}
+          onConfirm={(addr: string, lat: number, lng: number) => {
+            setDriverAddress(addr)
+            setDriverLat(lat)
+            setDriverLng(lng)
+            localStorage.setItem('driver_address', addr)
+            localStorage.setItem('driver_lat', String(lat))
+            localStorage.setItem('driver_lng', String(lng))
+            // 联动天气：提取 adcode
+            if (typeof window !== 'undefined' && (window as any).BMap) {
+              try {
+                const pt = new (window as any).BMap.Point(lng, lat)
+                const gc = new (window as any).BMap.Geocoder()
+                gc.getLocation(pt, (rs: any) => {
+                  const adcode = rs?.addressComponents?.adcode
+                  if (adcode) localStorage.setItem('driver_adcode', String(adcode))
+                  window.dispatchEvent(new Event('storage'))
+                })
+              } catch { /* ignore */ }
+            }
+            setShowMap(false)
+          }}
+          initialAddress={driverAddress}
+          initialLat={driverLat}
+          initialLng={driverLng}
+        />
       </header>
 
       {loading ? (

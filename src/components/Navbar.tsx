@@ -54,10 +54,13 @@ export default function Navbar() {
   return (
     <nav className="bg-white/70 backdrop-blur-md border-b border-white/20 sticky top-0 z-50 shadow-sm">
       <div className="max-w-5xl mx-auto px-6 h-14 flex items-center justify-between">
-        <Link href={role === 'customer' ? '/customer/home' : '/'} className="flex items-center gap-2 font-bold text-slate-800 text-lg">
-          <span>🍽️</span>
-          <span>小龙虾外卖</span>
-        </Link>
+        <div className="flex items-center gap-4 min-w-0">
+          <Link href={role === 'customer' ? '/customer/home' : '/'} className="flex items-center gap-2 font-bold text-slate-800 text-lg shrink-0">
+            <span>🍽️</span>
+            <span className="hidden sm:inline">小龙虾外卖</span>
+          </Link>
+          {/* 全角色通用地址选择入口 —— 交给各页面自行处理 */}
+        </div>
 
         <div className="flex items-center gap-3">
           <Link
