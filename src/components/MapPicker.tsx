@@ -123,28 +123,74 @@ export default function MapPicker({ open, onClose, onConfirm, initialAddress, in
         bm.setCenter(new (window as any).BMap.Point(safeLng, safeLat))
       }, 300)
 
-      // 鼠标点击重新标点
-      let clickTimer: ReturnType<typeof setTimeout>
+      // 🚀 全图任意点选：Marker 跃迁 + POI 级地标反查 + 三位一体回填
       bm.addEventListener('click', (e: any) => {
-        if (!mountedRef.current) return
-        const pt = e.latlng
+        if (!mountedRef.current || !e.point) return
+
+        const pt = e.point
+        const clickedLng = pt.lng
+        const clickedLat = pt.lat
+        console.log('📍 [MAP_CLICK_DEBUG] 物理点击坐标:', clickedLng, clickedLat)
+
+        // 1. 清除旧 Marker，新建 Marker 跃迁到点击处
         bm.clearOverlays()
         const newMk = new (window as any).BMap.Marker(pt)
         newMk.enableDragging()
         bm.addOverlay(newMk)
         setMarker(newMk)
-        setSelectedLat(pt.lat)
-        setSelectedLng(pt.lng)
-        if (clickTimer) clearTimeout(clickTimer)
-        clickTimer = setTimeout(() => {
-          if (!mountedRef.current) return
-          const gc = new (window as any).BMap.Geocoder()
-          gc.getLocation(pt, (rs: any) => {
+        setSelectedLat(clickedLat)
+        setSelectedLng(clickedLng)
+
+        // 2. POI 级三位一体逆地理：省市区 + 路名 + 实体地标
+        const gc = new (window as any).BMap.Geocoder()
+        gc.getLocation(
+          pt,
+          (rs: any) => {
             if (!mountedRef.current) return
-            const addr = rs?.address || `${pt.lat.toFixed(4)},${pt.lng.toFixed(4)}`
-            setSelectedAddress(addr)
-          })
-        }, 500)
+            const addComp = rs?.addressComponents
+            if (!addComp) {
+              setSelectedAddress(`${clickedLat.toFixed(4)},${clickedLng.toFixed(4)}`)
+              return
+            }
+
+            const province = addComp.province || ''
+            const city = addComp.city || ''
+            const district = addComp.district || ''
+            const street = addComp.street || ''
+            const streetNum = addComp.streetNumber || ''
+
+            // 提取最近 POI 地标（过滤纯路名）
+            const pois = rs.surroundingPois || []
+            const roadKeywords = ['路', '道', '街', '线', '桥', '高速']
+            let matchedBuilding = ''
+            for (const poi of pois) {
+              const title = poi.title || ''
+              const isPureRoad = roadKeywords.some(k => title.endsWith(k) || title.includes(k + '中'))
+              if (!isPureRoad || title.includes('步行街') || title.includes('美食街')) {
+                matchedBuilding = title
+                break
+              }
+            }
+
+            // 如果直接点中底图 POI 覆盖物（彩蛋）
+            const directPoi = e.overlay?.title || ''
+            const finalBuilding = directPoi || matchedBuilding || rs?.business || ''
+
+            // 三位一体合成
+            let finalAddr = `${province}${city}${district}${street}${streetNum}`
+            if (finalBuilding && !finalBuilding.includes(street)) {
+              finalAddr += finalBuilding
+            } else if (finalBuilding) {
+              finalAddr = `${province}${city}${district}${finalBuilding}`
+            }
+            finalAddr = finalAddr.replace(/undefined/gi, '').trim() || `${clickedLat.toFixed(4)},${clickedLng.toFixed(4)}`
+
+            console.log('🚀 [CLICK_ADDRESS_SYNC] 点击选点地址合成完毕:', finalAddr)
+            setSelectedAddress(finalAddr)
+            setSearchText(finalAddr)
+          },
+          { poiRadius: 150, numPois: 12 }
+        )
       })
 
       // 拖拽结束
