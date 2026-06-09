@@ -1,25 +1,16 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
 
 export const dynamic = 'force-dynamic'
-
-function getClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } }
-  )
-}
 
 /**
  * PUT /api/merchant/profile
  * 商家门店位置更新接口
+ * 用 Supabase REST API 直连 PATCH 规避 JS Client 的 schema cache
  */
 export async function PUT(request: Request) {
   try {
     const body = await request.json()
     const { merchant_id, shop_address, address, lng, lat } = body
-
     if (!merchant_id) {
       return NextResponse.json({ success: false, message: '缺少 merchant_id' }, { status: 400 })
     }
@@ -28,29 +19,36 @@ export async function PUT(request: Request) {
     const safeLng = lng ? Number(lng) : null
     const safeLat = lat ? Number(lat) : null
     const safeAddress = address || shop_address || ''
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+    const serviceKey = process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY!
 
     console.log('🏪 [API_MERCHANT_PROFILE] 收到请求:', JSON.stringify(body))
 
-    const supabase = getClient()
+    // 直接调用 PostgREST PATCH endpoint（绕过 JS Client schema cache）
+    const endpoint = `${supabaseUrl}/rest/v1/merchants?id=eq.${merchantId}`
+    const payload = { address: safeAddress, lng: safeLng, lat: safeLat }
 
-    // 先执行一条 SELECT 触发 schema cache 刷新
-    await supabase.from('merchants').select('id').limit(0)
+    const res = await fetch(endpoint, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': serviceKey,
+        'Authorization': `Bearer ${serviceKey}`,
+        'Prefer': 'return=minimal',
+      },
+      body: JSON.stringify(payload),
+    })
 
-    // 正常 update（address, lng, lat 是已知存在的列）
-    const { error } = await supabase
-      .from('merchants')
-      .update({ address: safeAddress, lng: safeLng, lat: safeLat })
-      .eq('id', merchantId)
-
-    if (error) {
-      console.error('❌ [MERCHANT_PROFILE] 写入失败:', error.message)
-      return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+    if (!res.ok) {
+      const txt = await res.text()
+      console.error('❌ [API_MERCHANT_PROFILE] PostgREST 写失败:', res.status, txt)
+      return NextResponse.json({ success: false, error: `写入失败: ${txt}` }, { status: 500 })
     }
 
-    console.log('✅ [MERCHANT_PROFILE] 门店坐标写入成功, merchant_id:', merchantId)
+    console.log('✅ [API_MERCHANT_PROFILE] 坐标写入成功, merchant_id:', merchantId)
     return NextResponse.json({ success: true, message: '门店空间数据同步成功！' })
   } catch (catchErr: any) {
-    console.error('🚨 [MERCHANT_PROFILE_CRASH] /api/merchant/profile 内部崩塌:', catchErr)
+    console.error('🚨 [API_MERCHANT_PROFILE_CRASH] /api/merchant/profile 内部崩塌:', catchErr)
     return NextResponse.json({ success: false, error: catchErr?.message || '未知服务端错误' }, { status: 500 })
   }
 }
