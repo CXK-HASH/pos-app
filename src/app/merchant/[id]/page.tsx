@@ -127,10 +127,18 @@ export default function MerchantPage() {
         }
       }).filter(Boolean)
 
+      // 从 localStorage 读取消费者位置
+      const consumerAddress = typeof window !== 'undefined' ? localStorage.getItem('customer_address') || '' : ''
+      const consumerLat = typeof window !== 'undefined' ? localStorage.getItem('customer_lat') : null
+      const consumerLng = typeof window !== 'undefined' ? localStorage.getItem('customer_lng') : null
+
       const payload = {
         merchantId: Number(merchantId),
         cart: cartItems,
         totalPrice: cartItems.reduce((sum, item) => sum + (item ? item.price * item.quantity : 0), 0),
+        consumerLat: consumerLat ? Number(consumerLat) : null,
+        consumerLng: consumerLng ? Number(consumerLng) : null,
+        consumerAddress: consumerAddress || null,
       }
 
       console.log('[PROD_DEBUG] 提交前的 cart 状态:', JSON.stringify(cart))
