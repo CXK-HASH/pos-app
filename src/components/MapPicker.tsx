@@ -110,11 +110,17 @@ export default function MapPicker({ open, onClose, onConfirm, initialAddress, in
         setMap(bm)
       }
 
-      // 动画完全结束后再次检查尺寸 + 重设中心（适配低端/移动端）
+      // 动画完全结束后再次检查尺寸 + 重设中心（零值熔断：飞郑州）
       setTimeout(() => {
         if (!mountedRef.current || !bm) return
         bm.checkResize()
-        bm.setCenter(new (window as any).BMap.Point(selectedLng, selectedLat))
+        // 二次熔断：防止 selectedLng/selectedLat 被异步改回 0
+        const safeLng = selectedLng || 113.625
+        const safeLat = selectedLat || 34.746
+        if (safeLng === 113.625 && safeLat === 34.746) {
+          console.log('⛑️ [MAP_SAFE_GUARD] 坐标保护触发，锚定郑州主城')
+        }
+        bm.setCenter(new (window as any).BMap.Point(safeLng, safeLat))
       }, 300)
 
       // 鼠标点击重新标点
@@ -451,13 +457,15 @@ export default function MapPicker({ open, onClose, onConfirm, initialAddress, in
           <div ref={mapRef} className="w-full h-[300px] rounded-xl" />
         </div>
 
-        {/* 选中地址信息 */}
+        {/* 选中地址信息（零值保护） */}
         <div className="px-4 pb-2">
           <p className="text-sm text-slate-500">
             <span className="text-orange-500">📍</span> 当前选中：
-            <span className="text-slate-800 font-medium ml-1">{selectedAddress || searchText || '未选择'}</span>
+            <span className="text-slate-800 font-medium ml-1">{selectedAddress || searchText || '等待获取或检索位置'}</span>
           </p>
-          <p className="text-xs text-slate-400 mt-0.5 ml-5">{selectedLat.toFixed(6)}, {selectedLng.toFixed(6)}</p>
+          {selectedLng !== 0 && selectedLat !== 0 && (
+            <p className="text-xs text-slate-400 mt-0.5 ml-5">{selectedLat.toFixed(6)}, {selectedLng.toFixed(6)}</p>
+          )}
         </div>
 
         {/* 底部按钮 */}
