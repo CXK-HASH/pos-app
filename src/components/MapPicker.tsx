@@ -28,6 +28,7 @@ interface MapPickerProps {
 export default function MapPicker({ open, onClose, onConfirm, initialAddress, initialLat, initialLng }: MapPickerProps) {
   const mapRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const mountedRef = useRef(false)
   const [map, setMap] = useState<any>(null)
   const [marker, setMarker] = useState<any>(null)
   const [selectedAddress, setSelectedAddress] = useState(initialAddress || '')
@@ -41,15 +42,20 @@ export default function MapPicker({ open, onClose, onConfirm, initialAddress, in
   const [bmapReady, setBmapReady] = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined)
   const panelRef = useRef<HTMLDivElement>(null)
-  const autoCompleteRef = useRef<any>(null)
   const checkTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
-  const gcCleanupRef = useRef<any>(null)
+
+  // 跟踪组件挂载状态，防止 unmount 后 setState
+  useEffect(() => {
+    mountedRef.current = true
+    return () => { mountedRef.current = false }
+  }, [])
 
   // 等 BMap 就绪（含清理保护）
   useEffect(() => {
     if (!open) return
     const check = () => {
-      if (typeof window !== 'undefined' && window.BMap) {
+      if (!mountedRef.current) return
+      if (typeof window !== 'undefined' && (window as any).BMap) {
         setBmapReady(true)
       } else {
         checkTimerRef.current = setTimeout(check, 200)
@@ -65,87 +71,78 @@ export default function MapPicker({ open, onClose, onConfirm, initialAddress, in
   useEffect(() => {
     if (!open || !bmapReady || !mapRef.current) return
 
-    // 200ms 宏任务延迟：确保弹窗动画完毕、容器尺寸固定后再实例化
+    // 延迟实例化，确保弹窗动画和容器渲染完毕
     const initTimer = setTimeout(() => {
-      // 清理旧实例
-      if (map) return // 已初始化
+      if (!mountedRef.current || map) return
 
-      // 二次确认容器尺寸 > 0
-      const rect = mapRef.current?.getBoundingClientRect()
-      if (!rect || rect.width === 0 || rect.height === 0) {
-        console.warn('⏳ [MAP_LIFECYCLE] 地图容器尚未就绪，延迟重试已跳过，尽量渲染...')
-      }
-
-      const defaultPoint = new window.BMap.Point(selectedLng, selectedLat)
-      const bm = new window.BMap.Map(mapRef.current)
+      const defaultPoint = new (window as any).BMap.Point(selectedLng, selectedLat)
+      const bm = new (window as any).BMap.Map(mapRef.current)
       bm.centerAndZoom(defaultPoint, 15)
       bm.enableScrollWheelZoom(true)
-      bm.addControl(new window.BMap.NavigationControl())
+      bm.addControl(new (window as any).BMap.NavigationControl())
 
-      const mk = new window.BMap.Marker(defaultPoint)
+      const mk = new (window as any).BMap.Marker(defaultPoint)
       mk.enableDragging()
       bm.addOverlay(mk)
-      setMarker(mk)
 
-      // 鼠标点击重新标点（带防抖逆地理）
+      if (mountedRef.current) {
+        setMarker(mk)
+        setMap(bm)
+      }
+
+      // 鼠标点击重新标点
       let clickTimer: ReturnType<typeof setTimeout>
       bm.addEventListener('click', (e: any) => {
+        if (!mountedRef.current) return
         const pt = e.latlng
         bm.clearOverlays()
-        const newMk = new window.BMap.Marker(pt)
+        const newMk = new (window as any).BMap.Marker(pt)
         newMk.enableDragging()
         bm.addOverlay(newMk)
+        if (!mountedRef.current) return
         setMarker(newMk)
         setSelectedLat(pt.lat)
         setSelectedLng(pt.lng)
         if (clickTimer) clearTimeout(clickTimer)
         clickTimer = setTimeout(() => {
-          const gc = new window.BMap.Geocoder()
+          if (!mountedRef.current) return
+          const gc = new (window as any).BMap.Geocoder()
           gc.getLocation(pt, (rs: any) => {
+            if (!mountedRef.current) return
             const addr = rs?.address || `${pt.lat.toFixed(4)},${pt.lng.toFixed(4)}`
             setSelectedAddress(addr)
           })
         }, 500)
       })
 
-      // 拖拽结束（带防抖逆地理）
+      // 拖拽结束
       let dragTimer: ReturnType<typeof setTimeout>
       mk.addEventListener('dragend', (e: any) => {
+        if (!mountedRef.current) return
         const pt = e.point
         setSelectedLat(pt.lat)
         setSelectedLng(pt.lng)
         if (dragTimer) clearTimeout(dragTimer)
         dragTimer = setTimeout(() => {
-          const gc = new window.BMap.Geocoder()
+          if (!mountedRef.current) return
+          const gc = new (window as any).BMap.Geocoder()
           gc.getLocation(pt, (rs: any) => {
+            if (!mountedRef.current) return
             const addr = rs?.address || `${pt.lat.toFixed(4)},${pt.lng.toFixed(4)}`
             setSelectedAddress(addr)
           })
         }, 500)
       })
-
-      setMap(bm)
     }, 200)
 
     return () => {
       clearTimeout(initTimer)
       if (map) {
-        ;(map as any).destroy()
+        try { ;(map as any).destroy() } catch { /* ignore */ }
         setMap(null)
       }
     }
   }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // ==================== 百度地图 Autocomplete 离线联想 ====================
-  const initAutocomplete = useCallback(() => {
-    if (autoCompleteRef.current || !inputRef.current || !window.BMap) return
-
-    try {
-      // 方案 B：手动 LocalSearch 防抖联想（更可控）
-      // Ac 已绑定到 inputRef，但 BMap.Autocomplete 需要 DOM id
-      // 使用方案 B 更灵活
-    } catch { /* ignore */ }
-  }, [])
 
   // 防抖 POI 检索
   const searchPoi = useCallback((keyword: string) => {
@@ -155,20 +152,17 @@ export default function MapPicker({ open, onClose, onConfirm, initialAddress, in
       return
     }
 
-    // 用 BMap.LocalSearch 检索，传空字符串表示全国范围
-    // 注意：不能传 '中国'，百度 API 需要城市名或空字符串
     try {
-      const local = new window.BMap.LocalSearch('', {
+      const local = new (window as any).BMap.LocalSearch('', {
         pageCapacity: 6,
         onSearchComplete: () => {
+          if (!mountedRef.current) return
           const status = local.getStatus()
-          console.log('📡 [MAP_POI_DEBUG] 百度地图检索状态码 (Status):', status, '关键词:', keyword)
+          console.log('📡 [MAP_POI_DEBUG] 百度地图检索状态码:', status, '关键词:', keyword)
 
-          // BMAP_STATUS_SUCCESS = 0
           if (status === 0) {
             const results = local.getResults()
             if (!results) {
-              console.warn('📡 [MAP_POI_DEBUG] results 为空')
               setSuggestions([])
               setShowSuggestions(false)
               return
@@ -192,7 +186,7 @@ export default function MapPicker({ open, onClose, onConfirm, initialAddress, in
               setShowSuggestions(false)
             }
           } else {
-            console.error('❌ [MAP_POI_DEBUG] 百度检索失败，请自查 AK 类型或网络！错误状态码:', status, '关键词:', keyword)
+            console.error('❌ [MAP_POI_DEBUG] 百度检索失败，状态码:', status, '关键词:', keyword)
             setSuggestions([])
             setShowSuggestions(false)
           }
@@ -215,11 +209,14 @@ export default function MapPicker({ open, onClose, onConfirm, initialAddress, in
       setShowSuggestions(false)
       return
     }
-    debounceRef.current = setTimeout(() => searchPoi(value.trim()), 300)
+    debounceRef.current = setTimeout(() => {
+      if (mountedRef.current) searchPoi(value.trim())
+    }, 300)
   }
 
   // 选中 POI
   const handleSelectPoi = (poi: PoiItem) => {
+    if (!mountedRef.current) return
     setSearchText(poi.name)
     setSelectedAddress(poi.address || poi.name)
     setSelectedLat(poi.lat)
@@ -227,12 +224,11 @@ export default function MapPicker({ open, onClose, onConfirm, initialAddress, in
     setSuggestions([])
     setShowSuggestions(false)
 
-    // 同步移动地图标记
     if (map) {
       map.clearOverlays()
-      const pt = new window.BMap.Point(poi.lng, poi.lat)
+      const pt = new (window as any).BMap.Point(poi.lng, poi.lat)
       map.centerAndZoom(pt, 16)
-      const newMk = new window.BMap.Marker(pt)
+      const newMk = new (window as any).BMap.Marker(pt)
       newMk.enableDragging()
       map.addOverlay(newMk)
       setMarker(newMk)
@@ -251,24 +247,25 @@ export default function MapPicker({ open, onClose, onConfirm, initialAddress, in
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
-  // 打开时重新聚焦
+  // 打开时聚焦
   useEffect(() => {
     if (open) {
       setTimeout(() => inputRef.current?.focus(), 300)
     }
   }, [open])
 
-  // ==================== 搜索（地图跳转） ====================
+  // ==================== 搜索 ====================
   const handleSearch = () => {
-    if (!map || !searchText.trim()) return
-    const local = new window.BMap.LocalSearch(map, {
+    if (!map || !searchText.trim() || !mountedRef.current) return
+    const local = new (window as any).BMap.LocalSearch(map, {
       renderOptions: { map, autoViewport: true },
       onSearchComplete: (results: any) => {
+        if (!mountedRef.current) return
         if (results?.getNumPois() > 0) {
           const poi = results.getPoi(0)
           const pt = poi.point
           map.clearOverlays()
-          const newMk = new window.BMap.Marker(pt)
+          const newMk = new (window as any).BMap.Marker(pt)
           newMk.enableDragging()
           map.addOverlay(newMk)
           setMarker(newMk)
@@ -282,20 +279,21 @@ export default function MapPicker({ open, onClose, onConfirm, initialAddress, in
     setShowSuggestions(false)
   }
 
-  // ==================== 当前定位（高精度硬件模式）====================
+  // ==================== 当前定位 ====================
   const handleLocate = () => {
-    if (!map || !window.BMap) return
+    if (!map || !(window as any).BMap || !mountedRef.current) return
     try {
-      const geolocation = new window.BMap.Geolocation()
-      geolocation.enableSDKLocation() // 优先使用硬件 SDK 定位（移动端生效）
+      const geolocation = new (window as any).BMap.Geolocation()
+      geolocation.enableSDKLocation()
       geolocation.getCurrentPosition(
         function (this: any, r: any) {
+          if (!mountedRef.current) return
           if (this.getStatus() === (window as any).BMAP_STATUS_SUCCESS) {
             const pt = r.point
-            console.log('🎯 [MAP_LOCATION_DEBUG] 高精度定位坐标:', pt.lat, pt.lng, '地址:', r.address)
+            console.log('🎯 [MAP_LOCATION_DEBUG] 高精度定位坐标:', pt.lat, pt.lng)
             map.clearOverlays()
             map.centerAndZoom(pt, 16)
-            const newMk = new window.BMap.Marker(pt)
+            const newMk = new (window as any).BMap.Marker(pt)
             newMk.enableDragging()
             map.addOverlay(newMk)
             setMarker(newMk)
@@ -311,13 +309,12 @@ export default function MapPicker({ open, onClose, onConfirm, initialAddress, in
               setSelectedAddress(`${pt.lat.toFixed(4)}, ${pt.lng.toFixed(4)}`)
             }
           } else {
-            console.warn('⚠️ [MAP_LOCATION_DEBUG] 高精度定位失败，状态码:', this.getStatus(), '— 使用 IP 定位降级')
-            // 降级：仍然拿 r.point（IP 定位粗估坐标）
-            if (r && r.point) {
-              map.clearOverlays()
+            console.warn('⚠️ [MAP_LOCATION_DEBUG] 高精度定位失败，状态码:', this.getStatus(), '— IP 定位降级')
+            if (r && r.point && mountedRef.current) {
               const pt = r.point
+              map.clearOverlays()
               map.centerAndZoom(pt, 14)
-              const newMk = new window.BMap.Marker(pt)
+              const newMk = new (window as any).BMap.Marker(pt)
               map.addOverlay(newMk)
               setMarker(newMk)
               setSelectedLat(pt.lat)
@@ -328,16 +325,14 @@ export default function MapPicker({ open, onClose, onConfirm, initialAddress, in
                 const addrStr = `${addr.city || ''}${addr.district || ''}${addr.street || ''}${safeNum}`.replace(/undefined/gi, '').trim()
                 setSelectedAddress(addrStr)
                 setSearchText(addrStr)
-              } else {
-                setSelectedAddress(`${pt.lat.toFixed(4)}, ${pt.lng.toFixed(4)}`)
               }
             }
           }
         },
         {
-          enableHighAccuracy: true, // 强制浏览器硬件 GPS / WiFi 高精度
-          timeout: 10000,            // 10 秒超时
-          maximumAge: 0,             // 不消费缓存位置
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0,
         }
       )
     } catch (err) {
@@ -346,36 +341,40 @@ export default function MapPicker({ open, onClose, onConfirm, initialAddress, in
     }
   }
 
+  // ==================== 关闭（仅清空临时状态 = 解耦零副作用）====================
+  const handleClose = () => {
+    setSuggestions([])
+    setShowSuggestions(false)
+    // 不修改任何选中地址/坐标状态，不触发父组件回传
+    onClose()
+  }
+
   // ==================== 确认（含空值/脏数据防御）====================
   const handleConfirm = () => {
+    if (!mountedRef.current) return
     const raw = selectedAddress || searchText || `${selectedLat.toFixed(4)},${selectedLng.toFixed(4)}`
-    // 清洗：剔除 undefined/null 标签
     const addr = String(raw).replace(/undefined|null/gi, '').trim()
 
-    // 路由级防御：拒绝不完整空间参数
-    if (!selectedLng || !selectedLat || !addr || addr.includes('undefined') || addr === '') {
-      console.error('❌ [ROUTE_GUARD] 捕获到不合规的空间参数，拒绝提交流水线！', {
-        address: addr,
-        lng: selectedLng,
-        lat: selectedLat,
-      })
+    if (!selectedLng || !selectedLat || !addr || addr === '') {
+      console.error('❌ [ROUTE_GUARD] 不合规的空间参数，拒绝提交流水线！', { address: addr, lng: selectedLng, lat: selectedLat })
       alert('请先选择一个有效的位置')
       return
     }
 
+    // 确认成功才关闭
     onConfirm(addr, selectedLat, selectedLng)
   }
 
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-[70] bg-black/40 backdrop-blur-sm flex items-center justify-center px-4" onClick={onClose}>
+    <div className="fixed inset-0 z-[70] bg-black/40 backdrop-blur-sm flex items-center justify-center px-4" onClick={handleClose}>
       <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
 
         {/* 头部 */}
         <div className="flex items-center justify-between p-4 border-b border-slate-100">
           <h3 className="font-bold text-slate-800">📍 选择位置</h3>
-          <button onClick={onClose} className="w-8 h-8 bg-slate-100 rounded-full flex items-center justify-center text-slate-400 hover:bg-slate-200">✕</button>
+          <button onClick={handleClose} className="w-8 h-8 bg-slate-100 rounded-full flex items-center justify-center text-slate-400 hover:bg-slate-200">✕</button>
         </div>
 
         {/* 搜索栏 + 联想面板 */}
@@ -387,21 +386,17 @@ export default function MapPicker({ open, onClose, onConfirm, initialAddress, in
                 value={searchText}
                 onChange={e => handleInputChange(e.target.value)}
                 onKeyDown={e => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault()
-                    handleSearch()
-                  }
+                  if (e.key === 'Enter') { e.preventDefault(); handleSearch() }
                 }}
                 placeholder="搜索地址，如郑州东站..."
                 className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 placeholder-slate-400 outline-none focus:border-orange-500"
               />
 
-              {/* ===== POI 联想下拉面板 ===== */}
               {showSuggestions && suggestions.length > 0 && (
                 <div
                   ref={panelRef}
                   className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg z-[9999] max-h-[240px] overflow-y-auto"
-                style={{ position: 'absolute', zIndex: 9999 }}
+                  style={{ position: 'absolute', zIndex: 9999 }}
                 >
                   {suggestions.map((poi, idx) => (
                     <div
@@ -417,17 +412,10 @@ export default function MapPicker({ open, onClose, onConfirm, initialAddress, in
               )}
             </div>
 
-            <button
-              onClick={handleSearch}
-              className="px-4 py-2 bg-orange-500 text-white text-sm rounded-xl hover:bg-orange-600 transition-all whitespace-nowrap"
-            >
+            <button onClick={handleSearch} className="px-4 py-2 bg-orange-500 text-white text-sm rounded-xl hover:bg-orange-600 transition-all whitespace-nowrap">
               搜索
             </button>
-            <button
-              onClick={handleLocate}
-              className="px-4 py-2 bg-blue-500 text-white text-sm rounded-xl hover:bg-blue-600 transition-all whitespace-nowrap"
-              title="定位当前位置"
-            >
+            <button onClick={handleLocate} className="px-4 py-2 bg-blue-500 text-white text-sm rounded-xl hover:bg-blue-600 transition-all whitespace-nowrap" title="定位当前位置">
               📍
             </button>
           </div>
@@ -444,14 +432,12 @@ export default function MapPicker({ open, onClose, onConfirm, initialAddress, in
             <span className="text-orange-500">📍</span> 当前选中：
             <span className="text-slate-800 font-medium ml-1">{selectedAddress || searchText || '未选择'}</span>
           </p>
-          <p className="text-xs text-slate-400 mt-0.5 ml-5">
-            {selectedLat.toFixed(6)}, {selectedLng.toFixed(6)}
-          </p>
+          <p className="text-xs text-slate-400 mt-0.5 ml-5">{selectedLat.toFixed(6)}, {selectedLng.toFixed(6)}</p>
         </div>
 
         {/* 底部按钮 */}
         <div className="p-4 pt-2 flex gap-3 border-t border-slate-100">
-          <button onClick={onClose} className="flex-1 py-2.5 bg-slate-100 text-slate-600 rounded-xl text-sm font-medium hover:bg-slate-200">
+          <button onClick={handleClose} className="flex-1 py-2.5 bg-slate-100 text-slate-600 rounded-xl text-sm font-medium hover:bg-slate-200">
             取消
           </button>
           <button onClick={handleConfirm} className="flex-1 py-2.5 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-xl text-sm font-bold hover:shadow-md transition-all">
