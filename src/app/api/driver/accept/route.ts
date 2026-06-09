@@ -22,10 +22,8 @@ function calcDistance(lat1: number, lng1: number, lat2: number, lng2: number): n
  * 不足 1km 按 1km 算；超出部分每 0.5km 阶梯加 1 元
  */
 function calcDriverFee(distanceKm: number): number {
-  if (distanceKm <= 0) return 2
-  // 起步 1km = 2 元，之后每 0.5km + 1 元
-  const steps = Math.ceil(Math.max(0, distanceKm - 1) / 0.5)
-  return 2 + steps
+  // 每公里 1 元，不足 1km 按 1km 算
+  return Math.max(1, Math.ceil(distanceKm))
 }
 
 export async function PUT(request: Request) {

@@ -55,8 +55,8 @@ export async function GET() {
 
   /** 配送费：起步 1km=2 元，之后每 0.5km + 1 元 */
   function calcDriverFee(km: number): number {
-    if (km <= 0) return 2
-    return 2 + Math.ceil(Math.max(0, km - 1) / 0.5)
+    // 每公里 1 元，不足 1km 按 1km 算
+    return Math.max(1, Math.ceil(km))
   }
 
   const enriched = orders.map((o) => {
