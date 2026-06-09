@@ -64,7 +64,7 @@ export default function CustomerHome() {
   const [showAddressModal, setShowAddressModal] = useState(false)
   const [toast, setToast] = useState('')
 
-  // 自动定位
+  // 自动定位（单次，但逆地理只跑一次不用防抖）
   useEffect(() => {
     if (!navigator.geolocation) return
     navigator.geolocation.getCurrentPosition(
@@ -81,7 +81,7 @@ export default function CustomerHome() {
         }
       },
       () => {},
-      { enableHighAccuracy: true, timeout: 5000 }
+      { enableHighAccuracy: true, timeout: 5000, maximumAge: 300000 } // 允许缓存 5 分钟，减少 GPS 调用
     )
   }, [])
 

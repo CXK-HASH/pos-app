@@ -42,18 +42,23 @@ export default function MapPicker({ open, onClose, onConfirm, initialAddress, in
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined)
   const panelRef = useRef<HTMLDivElement>(null)
   const autoCompleteRef = useRef<any>(null)
+  const checkTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
+  const gcCleanupRef = useRef<any>(null)
 
-  // 等 BMap 就绪
+  // 等 BMap 就绪（含清理保护）
   useEffect(() => {
     if (!open) return
     const check = () => {
       if (typeof window !== 'undefined' && window.BMap) {
         setBmapReady(true)
       } else {
-        setTimeout(check, 200)
+        checkTimerRef.current = setTimeout(check, 200)
       }
     }
     check()
+    return () => {
+      if (checkTimerRef.current) clearTimeout(checkTimerRef.current)
+    }
   }, [open])
 
   // ==================== 地图初始化 ====================
@@ -74,7 +79,8 @@ export default function MapPicker({ open, onClose, onConfirm, initialAddress, in
     bm.addOverlay(mk)
     setMarker(mk)
 
-    // 鼠标点击重新标点
+    // 鼠标点击重新标点（带防抖逆地理）
+    let clickTimer: ReturnType<typeof setTimeout>
     bm.addEventListener('click', (e: any) => {
       const pt = e.latlng
       bm.clearOverlays()
@@ -84,23 +90,31 @@ export default function MapPicker({ open, onClose, onConfirm, initialAddress, in
       setMarker(newMk)
       setSelectedLat(pt.lat)
       setSelectedLng(pt.lng)
-      const gc = new window.BMap.Geocoder()
-      gc.getLocation(pt, (rs: any) => {
-        const addr = rs?.address || `${pt.lat.toFixed(4)},${pt.lng.toFixed(4)}`
-        setSelectedAddress(addr)
-      })
+      // 防抖：连续点击只执行最后一次逆地理
+      if (clickTimer) clearTimeout(clickTimer)
+      clickTimer = setTimeout(() => {
+        const gc = new window.BMap.Geocoder()
+        gc.getLocation(pt, (rs: any) => {
+          const addr = rs?.address || `${pt.lat.toFixed(4)},${pt.lng.toFixed(4)}`
+          setSelectedAddress(addr)
+        })
+      }, 500)
     })
 
-    // 拖拽结束
+    // 拖拽结束（带防抖逆地理）
+    let dragTimer: ReturnType<typeof setTimeout>
     mk.addEventListener('dragend', (e: any) => {
       const pt = e.point
       setSelectedLat(pt.lat)
       setSelectedLng(pt.lng)
-      const gc = new window.BMap.Geocoder()
-      gc.getLocation(pt, (rs: any) => {
-        const addr = rs?.address || `${pt.lat.toFixed(4)},${pt.lng.toFixed(4)}`
-        setSelectedAddress(addr)
-      })
+      if (dragTimer) clearTimeout(dragTimer)
+      dragTimer = setTimeout(() => {
+        const gc = new window.BMap.Geocoder()
+        gc.getLocation(pt, (rs: any) => {
+          const addr = rs?.address || `${pt.lat.toFixed(4)},${pt.lng.toFixed(4)}`
+          setSelectedAddress(addr)
+        })
+      }, 500)
     })
 
     setMap(bm)
