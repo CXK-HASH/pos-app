@@ -40,8 +40,12 @@ export default function WeatherWidget() {
   const fetchWeather = useCallback(async () => {
     setLoading(true)
 
-    // 从 localStorage 读取 adcode（用户定位联动）
-    const adcode = typeof window !== 'undefined' ? localStorage.getItem('customer_adcode') : null
+    // 从 localStorage 读取 adcode（全角色联动：customer_ / driver_ / merchant_）
+    const adcode = typeof window !== 'undefined'
+      ? (localStorage.getItem('customer_adcode') ||
+         localStorage.getItem('driver_adcode') ||
+         null)
+      : null
     const districtId = adcode || '410100' // 兜底郑州
 
     try {
