@@ -24,6 +24,7 @@ type Order = {
   consumer_address: string | null
   consumer_lat: number | null
   consumer_lng: number | null
+  driver_fee: number | null
   created_at: string
 }
 
@@ -243,8 +244,11 @@ export default function DriverDashboard() {
             <span className="text-gray-400 ml-2">商户距顾客 {formatDistance(distMerchantToConsumer)}</span>
           </div>
         )}
-        <div className="text-orange-400 font-bold text-lg mb-3">
-          ¥{parseFloat(order.total_price as unknown as string).toFixed(2)}
+        <div className="flex items-baseline gap-2 mb-3">
+          <span className="text-orange-400 font-bold text-lg">💰 收益 ¥{parseFloat(String(order.driver_fee || 0)).toFixed(2)}</span>
+          {distMerchantToConsumer !== null && (
+            <span className="text-xs text-gray-500">配送 {formatDistance(distMerchantToConsumer)}</span>
+          )}
         </div>
         <button
           onClick={() => handleAccept(order.id)}
@@ -296,8 +300,9 @@ export default function DriverDashboard() {
           </div>
         )}
 
-        <div className="text-orange-400 font-bold text-lg mb-3">
-          ¥{parseFloat(order.total_price as unknown as string).toFixed(2)}
+        <div className="flex items-baseline gap-2 mb-3">
+          <span className="text-orange-400 font-bold text-lg">💰 收益 ¥{parseFloat(String(order.driver_fee || 0)).toFixed(2)}</span>
+          <span className="text-xs text-gray-500">顾客实付 ¥{parseFloat(String(order.total_price)).toFixed(2)}</span>
         </div>
 
         {/* 双因子状态指示器 */}

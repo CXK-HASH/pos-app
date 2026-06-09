@@ -13,7 +13,7 @@ export async function POST(request: Request) {
 
   console.log('[PROD_DEBUG] 后端实际接收到的原始 Payload:', JSON.stringify(body))
 
-  const { cart, totalPrice, merchantId } = body
+  const { cart, totalPrice, merchantId, consumerLat, consumerLng, consumerAddress } = body
 
   if (!cart || !Array.isArray(cart) || cart.length === 0) {
     console.error('[PROD_DEBUG] 购物车校验失败, cart =', JSON.stringify(cart))
@@ -78,10 +78,10 @@ export async function POST(request: Request) {
     merchant_lat: merchantLat,
     merchant_lng: merchantLng,
     merchant_address: merchantAddress,
-    // 消费者地址——前端后续可传入，暂留空
-    consumer_lat: null,
-    consumer_lng: null,
-    consumer_address: null,
+    // 消费者地址（由前端传入）
+    consumer_lat: consumerLat ? Number(consumerLat) : null,
+    consumer_lng: consumerLng ? Number(consumerLng) : null,
+    consumer_address: consumerAddress || null,
   }
 
   console.log('[PROD_DEBUG] 即将写入 orders:', JSON.stringify(orderData))
