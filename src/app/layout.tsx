@@ -49,6 +49,23 @@ export default function RootLayout({
         )}
         <Navbar />
         <main className="flex-1">{children}</main>
+
+        {/* Dify AI 客服 */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `window.difyChatbotConfig = {
+              token: 'kXtniUYlZOuWJTKB',
+              inputs: {},
+              systemVariables: {},
+              userVariables: {},
+            }`,
+          }}
+        />
+        <script src="https://udify.app/embed.min.js" id="kXtniUYlZOuWJTKB" defer />
+        <style>{`
+          #dify-chatbot-bubble-button { background-color: #1C64F2 !important; }
+          #dify-chatbot-bubble-window { width: 24rem !important; height: 40rem !important; }
+        `}</style>
       </body>
     </html>
   );
