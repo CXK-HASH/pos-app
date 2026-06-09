@@ -367,6 +367,22 @@ export default function CustomerHome() {
       )}
 
       <div className="max-w-5xl mx-auto px-6 py-6 space-y-8">
+        {/* 刷视频入口 */}
+        <Link
+          href="/customer/video"
+          className="block bg-gradient-to-br from-purple-600 via-pink-500 to-red-500 rounded-2xl shadow-md p-5 text-white relative overflow-hidden group hover:shadow-lg hover:-translate-y-0.5 transition-all"
+        >
+          <div className="absolute -right-6 -top-6 w-28 h-28 bg-white/10 rounded-full blur-2xl"></div>
+          <div className="relative z-10 flex items-center gap-4">
+            <span className="text-3xl">🎬</span>
+            <div>
+              <p className="font-bold text-lg">刷视频</p>
+              <p className="text-sm text-white/70 mt-0.5">边看边吃，发现美食灵感</p>
+            </div>
+            <span className="ml-auto text-2xl group-hover:translate-x-1 transition-transform">→</span>
+          </div>
+        </Link>
+
         {/* Banner 广告位 */}
         <div className="bg-gradient-to-br from-amber-500 via-orange-500 to-orange-600 rounded-2xl shadow-md p-6 text-white relative overflow-hidden">
           <div className="absolute -right-8 -top-8 w-40 h-40 bg-white/10 rounded-full blur-2xl"></div>
