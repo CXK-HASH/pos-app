@@ -50,7 +50,21 @@ export default function MapPicker({ open, onClose, onConfirm, initialAddress, in
     return () => { mountedRef.current = false }
   }, [])
 
-  // 等 BMap 就绪（含清理保护）
+  // 弹窗关闭时重置地图相关状态，保证下次打开全新初始化
+  useEffect(() => {
+    if (!open) {
+      setMap(null)
+      setMarker(null)
+      setSuggestions([])
+      setShowSuggestions(false)
+      searchText !== (initialAddress || '') && setSearchText(initialAddress || '')
+    } else {
+      // 打开时清空 bmapReady，等待重新加载
+      setBmapReady(false)
+    }
+  }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 等 BMap 就绪
   useEffect(() => {
     if (!open) return
     const check = () => {
@@ -67,19 +81,21 @@ export default function MapPicker({ open, onClose, onConfirm, initialAddress, in
     }
   }, [open])
 
-  // ==================== 地图初始化（200ms 延迟等待弹窗动画 + 容器尺寸检测）====================
+  // ==================== 地图初始化 ====================
   useEffect(() => {
-    if (!open || !bmapReady || !mapRef.current) return
+    if (!open || !bmapReady || !mapRef.current || map) return
 
-    // 延迟实例化，确保弹窗动画和容器渲染完毕
     const initTimer = setTimeout(() => {
-      if (!mountedRef.current || map) return
+      if (!mountedRef.current) return
 
       const defaultPoint = new (window as any).BMap.Point(selectedLng, selectedLat)
       const bm = new (window as any).BMap.Map(mapRef.current)
       bm.centerAndZoom(defaultPoint, 15)
       bm.enableScrollWheelZoom(true)
       bm.addControl(new (window as any).BMap.NavigationControl())
+
+      // 立即检测一次尺寸
+      bm.checkResize()
 
       const mk = new (window as any).BMap.Marker(defaultPoint)
       mk.enableDragging()
@@ -90,6 +106,13 @@ export default function MapPicker({ open, onClose, onConfirm, initialAddress, in
         setMap(bm)
       }
 
+      // 动画完全结束后再次检查尺寸 + 重设中心（适配低端/移动端）
+      setTimeout(() => {
+        if (!mountedRef.current || !bm) return
+        bm.checkResize()
+        bm.setCenter(new (window as any).BMap.Point(selectedLng, selectedLat))
+      }, 300)
+
       // 鼠标点击重新标点
       let clickTimer: ReturnType<typeof setTimeout>
       bm.addEventListener('click', (e: any) => {
@@ -99,7 +122,6 @@ export default function MapPicker({ open, onClose, onConfirm, initialAddress, in
         const newMk = new (window as any).BMap.Marker(pt)
         newMk.enableDragging()
         bm.addOverlay(newMk)
-        if (!mountedRef.current) return
         setMarker(newMk)
         setSelectedLat(pt.lat)
         setSelectedLng(pt.lng)
@@ -133,16 +155,15 @@ export default function MapPicker({ open, onClose, onConfirm, initialAddress, in
           })
         }, 500)
       })
-    }, 200)
+    }, 150)
 
     return () => {
       clearTimeout(initTimer)
       if (map) {
         try { ;(map as any).destroy() } catch { /* ignore */ }
-        setMap(null)
       }
     }
-  }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open, bmapReady]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // 防抖 POI 检索
   const searchPoi = useCallback((keyword: string) => {
