@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import MapPicker from '@/components/MapPicker'
+import WeatherWidget from '@/components/WeatherWidget'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase/client'
@@ -260,7 +261,10 @@ export default function CustomerHome() {
     <div className="min-h-screen bg-slate-50">
       {/* 搜索与定位区 */}
       <div className="sticky top-14 z-40 bg-white/60 backdrop-blur-md border-b border-slate-100">
-        <div className="max-w-5xl mx-auto px-6 py-3 flex items-center gap-3">
+        <div className="max-w-5xl mx-auto px-6 py-3 flex items-center gap-2">
+          {/* 天气组件 */}
+          <WeatherWidget city={(typeof window !== 'undefined' && localStorage.getItem('customer_city')) || undefined} />
+
           {/* 地址切换 */}
           <button
             onClick={() => setShowAddressModal(true)}
