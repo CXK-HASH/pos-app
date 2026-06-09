@@ -26,7 +26,7 @@ export default function DifyChatbot() {
       style.id = 'dify-custom-style'
       style.textContent = `
         #dify-chatbot-bubble-button { background-color: #1C64F2 !important; }
-        #dify-chatbot-bubble-window { width: 24rem !important; height: 40rem !important; }
+        #dify-chatbot-bubble-window { width: 24rem !important; height: 34rem !important; }
       `
       document.head.appendChild(style)
 
