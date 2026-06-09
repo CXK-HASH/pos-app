@@ -94,7 +94,9 @@ export default function DriverDashboard() {
               setDriverLng(r.point.lng)
               const addr = r.address
               if (addr) {
-                setDriverAddress(`${addr.city}${addr.district}${addr.street}${addr.streetNumber}`)
+                const safeNum = addr.streetNumber || ''
+                const addrStr = `${addr.city || ''}${addr.district || ''}${addr.street || ''}${safeNum}`.replace(/undefined/gi, '').trim()
+                setDriverAddress(addrStr)
               } else {
                 setDriverAddress(`${r.point.lat.toFixed(4)}, ${r.point.lng.toFixed(4)}`)
               }

@@ -292,7 +292,8 @@ export default function MapPicker({ open, onClose, onConfirm, initialAddress, in
             setSelectedLng(pt.lng)
             const addr = r.address
             if (addr) {
-              const addrStr = `${addr.city}${addr.district}${addr.street}${addr.streetNumber}`
+              const safeNum = addr.streetNumber || ''
+              const addrStr = `${addr.city || ''}${addr.district || ''}${addr.street || ''}${safeNum}`.replace(/undefined/gi, '').trim()
               setSelectedAddress(addrStr)
               setSearchText(addrStr)
             } else {
@@ -312,7 +313,8 @@ export default function MapPicker({ open, onClose, onConfirm, initialAddress, in
               setSelectedLng(pt.lng)
               const addr = r.address
               if (addr) {
-                const addrStr = `${addr.city}${addr.district}${addr.street}${addr.streetNumber}`
+                const safeNum = addr.streetNumber || ''
+                const addrStr = `${addr.city || ''}${addr.district || ''}${addr.street || ''}${safeNum}`.replace(/undefined/gi, '').trim()
                 setSelectedAddress(addrStr)
                 setSearchText(addrStr)
               } else {
@@ -333,9 +335,23 @@ export default function MapPicker({ open, onClose, onConfirm, initialAddress, in
     }
   }
 
-  // ==================== 确认 ====================
+  // ==================== 确认（含空值/脏数据防御）====================
   const handleConfirm = () => {
-    const addr = selectedAddress || searchText || `${selectedLat.toFixed(4)},${selectedLng.toFixed(4)}`
+    const raw = selectedAddress || searchText || `${selectedLat.toFixed(4)},${selectedLng.toFixed(4)}`
+    // 清洗：剔除 undefined/null 标签
+    const addr = String(raw).replace(/undefined|null/gi, '').trim()
+
+    // 路由级防御：拒绝不完整空间参数
+    if (!selectedLng || !selectedLat || !addr || addr.includes('undefined') || addr === '') {
+      console.error('❌ [ROUTE_GUARD] 捕获到不合规的空间参数，拒绝提交流水线！', {
+        address: addr,
+        lng: selectedLng,
+        lat: selectedLat,
+      })
+      alert('请先选择一个有效的位置')
+      return
+    }
+
     onConfirm(addr, selectedLat, selectedLng)
   }
 
