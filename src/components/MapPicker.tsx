@@ -61,67 +61,78 @@ export default function MapPicker({ open, onClose, onConfirm, initialAddress, in
     }
   }, [open])
 
-  // ==================== 地图初始化 ====================
+  // ==================== 地图初始化（200ms 延迟等待弹窗动画 + 容器尺寸检测）====================
   useEffect(() => {
     if (!open || !bmapReady || !mapRef.current) return
 
-    // 清理旧实例
-    if (map) return // 已初始化
+    // 200ms 宏任务延迟：确保弹窗动画完毕、容器尺寸固定后再实例化
+    const initTimer = setTimeout(() => {
+      // 清理旧实例
+      if (map) return // 已初始化
 
-    const defaultPoint = new window.BMap.Point(selectedLng, selectedLat)
-    const bm = new window.BMap.Map(mapRef.current)
-    bm.centerAndZoom(defaultPoint, 15)
-    bm.enableScrollWheelZoom(true)
-    bm.addControl(new window.BMap.NavigationControl())
+      // 二次确认容器尺寸 > 0
+      const rect = mapRef.current?.getBoundingClientRect()
+      if (!rect || rect.width === 0 || rect.height === 0) {
+        console.warn('⏳ [MAP_LIFECYCLE] 地图容器尚未就绪，延迟重试已跳过，尽量渲染...')
+      }
 
-    const mk = new window.BMap.Marker(defaultPoint)
-    mk.enableDragging()
-    bm.addOverlay(mk)
-    setMarker(mk)
+      const defaultPoint = new window.BMap.Point(selectedLng, selectedLat)
+      const bm = new window.BMap.Map(mapRef.current)
+      bm.centerAndZoom(defaultPoint, 15)
+      bm.enableScrollWheelZoom(true)
+      bm.addControl(new window.BMap.NavigationControl())
 
-    // 鼠标点击重新标点（带防抖逆地理）
-    let clickTimer: ReturnType<typeof setTimeout>
-    bm.addEventListener('click', (e: any) => {
-      const pt = e.latlng
-      bm.clearOverlays()
-      const newMk = new window.BMap.Marker(pt)
-      newMk.enableDragging()
-      bm.addOverlay(newMk)
-      setMarker(newMk)
-      setSelectedLat(pt.lat)
-      setSelectedLng(pt.lng)
-      // 防抖：连续点击只执行最后一次逆地理
-      if (clickTimer) clearTimeout(clickTimer)
-      clickTimer = setTimeout(() => {
-        const gc = new window.BMap.Geocoder()
-        gc.getLocation(pt, (rs: any) => {
-          const addr = rs?.address || `${pt.lat.toFixed(4)},${pt.lng.toFixed(4)}`
-          setSelectedAddress(addr)
-        })
-      }, 500)
-    })
+      const mk = new window.BMap.Marker(defaultPoint)
+      mk.enableDragging()
+      bm.addOverlay(mk)
+      setMarker(mk)
 
-    // 拖拽结束（带防抖逆地理）
-    let dragTimer: ReturnType<typeof setTimeout>
-    mk.addEventListener('dragend', (e: any) => {
-      const pt = e.point
-      setSelectedLat(pt.lat)
-      setSelectedLng(pt.lng)
-      if (dragTimer) clearTimeout(dragTimer)
-      dragTimer = setTimeout(() => {
-        const gc = new window.BMap.Geocoder()
-        gc.getLocation(pt, (rs: any) => {
-          const addr = rs?.address || `${pt.lat.toFixed(4)},${pt.lng.toFixed(4)}`
-          setSelectedAddress(addr)
-        })
-      }, 500)
-    })
+      // 鼠标点击重新标点（带防抖逆地理）
+      let clickTimer: ReturnType<typeof setTimeout>
+      bm.addEventListener('click', (e: any) => {
+        const pt = e.latlng
+        bm.clearOverlays()
+        const newMk = new window.BMap.Marker(pt)
+        newMk.enableDragging()
+        bm.addOverlay(newMk)
+        setMarker(newMk)
+        setSelectedLat(pt.lat)
+        setSelectedLng(pt.lng)
+        if (clickTimer) clearTimeout(clickTimer)
+        clickTimer = setTimeout(() => {
+          const gc = new window.BMap.Geocoder()
+          gc.getLocation(pt, (rs: any) => {
+            const addr = rs?.address || `${pt.lat.toFixed(4)},${pt.lng.toFixed(4)}`
+            setSelectedAddress(addr)
+          })
+        }, 500)
+      })
 
-    setMap(bm)
+      // 拖拽结束（带防抖逆地理）
+      let dragTimer: ReturnType<typeof setTimeout>
+      mk.addEventListener('dragend', (e: any) => {
+        const pt = e.point
+        setSelectedLat(pt.lat)
+        setSelectedLng(pt.lng)
+        if (dragTimer) clearTimeout(dragTimer)
+        dragTimer = setTimeout(() => {
+          const gc = new window.BMap.Geocoder()
+          gc.getLocation(pt, (rs: any) => {
+            const addr = rs?.address || `${pt.lat.toFixed(4)},${pt.lng.toFixed(4)}`
+            setSelectedAddress(addr)
+          })
+        }, 500)
+      })
+
+      setMap(bm)
+    }, 200)
 
     return () => {
-      bm.destroy()
-      setMap(null)
+      clearTimeout(initTimer)
+      if (map) {
+        ;(map as any).destroy()
+        setMap(null)
+      }
     }
   }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
 
