@@ -98,9 +98,6 @@ export default function RootLayout({
           id="kXtniUYlZOuWJTKB"
           src="https://udify.app/embed.min.js"
           strategy="lazyOnload"
-          onLoad={() => {
-            console.log("🤖 [DIFY_RESTORE_SUCCESS] 专属 AI 客服已成功精准补回，右下角气泡重新上线！");
-          }}
         />
 
         {/* 消费者角色条件渲染（仅作控制显示，不重复注入脚本） */}
