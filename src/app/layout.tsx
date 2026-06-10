@@ -93,27 +93,67 @@ export default function RootLayout({
                 overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:999998;display:none;';
                 document.body.appendChild(overlay);
 
+                function toggleBubble(show) {
+                  var btn = document.getElementById('dify-chatbot-bubble-button');
+                  var win = document.getElementById('dify-chatbot-bubble-window');
+                  if (show) {
+                    if (btn) btn.style.display = 'none';
+                    if (win) win.style.display = '';
+                    overlay.style.display = 'block';
+                  } else {
+                    if (btn) btn.style.display = '';
+                    if (win) win.style.display = 'none';
+                    overlay.style.display = 'none';
+                  }
+                }
+
+                // 点击遮罩关闭
                 overlay.addEventListener('click', function(e) {
                   if (e.target === overlay) {
+                    toggleBubble(false);
+                  }
+                });
+
+                // 点击气泡按钮：开
+                document.addEventListener('click', function(e) {
+                  var btn = document.getElementById('dify-chatbot-bubble-button');
+                  if (btn && (e.target === btn || btn.contains(e.target))) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    toggleBubble(true);
+                  }
+                });
+
+                // 监听气泡按钮点击（兼顾原生 toggle）
+                document.addEventListener('click', function(e) {
+                  var btn = document.getElementById('dify-chatbot-bubble-button');
+                  if (btn && (e.target === btn || btn.contains(e.target))) {
+                    setTimeout(function() {
+                      var win = document.getElementById('dify-chatbot-bubble-window');
+                      if (win && win.style.display !== 'none') {
+                        btn.style.display = 'none';
+                        overlay.style.display = 'block';
+                      }
+                    }, 100);
+                  }
+                });
+
+                // 监听叉号点击（虽然在 CSS 中隐藏，但原生 Dify 可能有键盘关闭）
+                document.addEventListener('click', function(e) {
+                  var win = document.getElementById('dify-chatbot-bubble-window');
+                  if (win && win.style.display === 'none') {
                     var btn = document.getElementById('dify-chatbot-bubble-button');
-                    if (btn) btn.click();
+                    if (btn) btn.style.display = '';
                     overlay.style.display = 'none';
                   }
                 });
 
-                // 监听到气泡窗口显示时，显示遮罩
-                var observer = new MutationObserver(function() {
-                  var win = document.getElementById('dify-chatbot-bubble-window');
-                  if (win) {
-                    overlay.style.display = win.style.display !== 'none' ? 'block' : 'none';
-                  }
-                });
-
-                // 等 embed.min.js 渲染完成后再观察
+                // 等 embed.min.js 渲染完成
                 setTimeout(function() {
                   var win = document.getElementById('dify-chatbot-bubble-window');
                   if (win) {
-                    observer.observe(win, { attributes: true, attributeFilter: ['style'] });
+                    // 初始状态：隐藏窗口
+                    win.style.display = 'none';
                   }
                 }, 2000);
               })();
