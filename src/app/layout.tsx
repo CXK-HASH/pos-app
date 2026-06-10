@@ -44,6 +44,10 @@ export default function RootLayout({
               position: fixed !important;
               z-index: 999999 !important;
             }
+            /* 隐藏右上角关闭叉号 */
+            #closeIcon {
+              display: none !important;
+            }
           `
         }} />
         <script
