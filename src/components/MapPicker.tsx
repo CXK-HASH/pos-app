@@ -394,13 +394,10 @@ export default function MapPicker({ open, onClose, onConfirm, initialAddress, in
     }
   }
 
-  // ==================== 当前定位（HTML5 GPS + 百度 SDK 双源竞争，取精度高的）====================
+  // ==================== 当前定位（双源竞争 + 异常地址自动回退）====================
   const handleLocate = () => {
     if (!map || !(window as any).BMap || !mountedRef.current) return
 
-    let bestLat = 0
-    let bestLng = 0
-    let bestAccuracy = Infinity
     let settled = false
 
     const applyPosition = (lat: number, lng: number, source: string) => {
@@ -411,6 +408,8 @@ export default function MapPicker({ open, onClose, onConfirm, initialAddress, in
       convertToBd09(lat, lng).then((bdCoord) => {
         if (!mountedRef.current) return
         const { lat: bdLat, lng: bdLng } = bdCoord
+
+        // 先定位到地图上
         map!.clearOverlays()
         map!.centerAndZoom(new (window as any).BMap.Point(bdLng, bdLat), 17)
         const newMk = new (window as any).BMap.Marker(new (window as any).BMap.Point(bdLng, bdLat))
@@ -420,6 +419,7 @@ export default function MapPicker({ open, onClose, onConfirm, initialAddress, in
         setSelectedLat(bdLat)
         setSelectedLng(bdLng)
 
+        // 逆地理编码，判断地址是否可信
         getLocationWithGuard(bdLng, bdLat, (rs: any) => {
           if (!mountedRef.current) return
           const addComp = rs?.addressComponents
@@ -430,12 +430,70 @@ export default function MapPicker({ open, onClose, onConfirm, initialAddress, in
           const baseArea = `${addComp.province || ''}${addComp.city || ''}${addComp.district || ''}`.replace(/undefined/gi, '')
           const primaryPoi = rs?.surroundingPois?.[0]
           const poiTitle = primaryPoi?.title || ''
-          let finalAddr = baseArea + (poiTitle || `${addComp.street || ''}${addComp.streetNumber || ''}`)
-          finalAddr = finalAddr.replace(/undefined/gi, '').trim() || `${bdLat.toFixed(4)}, ${bdLng.toFixed(4)}`
-          setSelectedAddress(finalAddr)
-          setSearchText(finalAddr)
+          const fullAddr = baseArea + (poiTitle || `${addComp.street || ''}${addComp.streetNumber || ''}`)
+          const finalAddr = fullAddr.replace(/undefined/gi, '').trim() || `${bdLat.toFixed(4)}, ${bdLng.toFixed(4)}`
+
+          // 检查地址是否有明显的问题特征
+          // 1. 地址名以小区/广场/商场结尾（典型运营商 IP 定位特征）
+          // 2. 逆地理编码返回的 POI 只有街道级别，没有具体建筑
+          const suspiciousPatterns = /(豪都|小区|广场|大厦|购物中心|商业街|步行街|建材市场|批发市场)$/
+          const isSuspicious = suspiciousPatterns.test(poiTitle) || (!poiTitle && source === 'BMapSDK')
+
+          if (isSuspicious) {
+            console.log('🔍 [LOCATE] 定位地址不可信 (' + poiTitle + ')，尝试周边搜索就近建筑')
+            // 用坐标搜索附近 POI，取第一个非可疑建筑
+            nearbySearch(bdLat, bdLng, (nearbyPoi) => {
+              if (mountedRef.current && nearbyPoi) {
+                console.log('🏢 [LOCATE] 就近建筑:', nearbyPoi.title, nearbyPoi.address)
+                setSelectedAddress(nearbyPoi.address || nearbyPoi.title)
+                setSearchText(nearbyPoi.title)
+                map!.centerAndZoom(new (window as any).BMap.Point(nearbyPoi.lng, nearbyPoi.lat), 17)
+                map!.clearOverlays()
+                const nk = new (window as any).BMap.Marker(new (window as any).BMap.Point(nearbyPoi.lng, nearbyPoi.lat))
+                nk.enableDragging()
+                map!.addOverlay(nk)
+                setMarker(nk)
+                setSelectedLat(nearbyPoi.lat)
+                setSelectedLng(nearbyPoi.lng)
+              } else {
+                // 附近搜不到更好建筑，先用原地址，提示可拖拽微调
+                setSelectedAddress(finalAddr)
+                setSearchText(finalAddr)
+              }
+            })
+          } else {
+            setSelectedAddress(finalAddr)
+            setSearchText(finalAddr)
+          }
         })
       })
+    }
+
+    // 附近搜索：取第一个 POI 中排除可疑建筑的
+    const nearbySearch = (lat: number, lng: number, cb: (poi?: any) => void) => {
+      try {
+        const local = new (window as any).BMap.LocalSearch('', {
+          pageCapacity: 5,
+          onSearchComplete: (results: any) => {
+            for (let i = 0; i < results.getCurrentNumPois(); i++) {
+              const p = results.getPoi(i)
+              // 跳过小区/广场等不可信 POI
+              if (!/(住宅|家属院|小区|公寓|大厦|广场)$/.test(p.title)) {
+                cb({
+                  title: p.title,
+                  address: p.address,
+                  lat: p.point.lat,
+                  lng: p.point.lng,
+                })
+                return
+              }
+            }
+            cb() // 无可信 POI
+          },
+        })
+        // 用坐标反向搜索周边建筑
+        local.searchNearby('', new (window as any).BMap.Point(lng, lat), 300)
+      } catch { cb() }
     }
 
     // 源1：HTML5 GPS
@@ -445,12 +503,8 @@ export default function MapPicker({ open, onClose, onConfirm, initialAddress, in
           if (!mountedRef.current || settled) return
           const acc = pos.coords.accuracy || Infinity
           console.log('📡 [GPS] HTML5 返回, accuracy:', acc, '坐标:', pos.coords.latitude, pos.coords.longitude)
-          // accuracy ≤ 200 米才算准（Wi-Fi定位一般 50-200m）
-          if (acc < bestAccuracy && acc <= 500) {
-            bestAccuracy = acc
-            bestLat = pos.coords.latitude
-            bestLng = pos.coords.longitude
-            applyPosition(bestLat, bestLng, 'GPS(' + acc.toFixed(0) + 'm)')
+          if (acc <= 500) {
+            applyPosition(pos.coords.latitude, pos.coords.longitude, 'GPS(' + acc.toFixed(0) + 'm)')
           }
         },
         (err) => {
@@ -467,9 +521,8 @@ export default function MapPicker({ open, onClose, onConfirm, initialAddress, in
       geolocation.getCurrentPosition(
         function (this: any, r: any) {
           if (!mountedRef.current || settled) return
-          const pt = r.point
-          // 百度没有 accuracy，但如果状态成功就认为可用
           if (this.getStatus() === (window as any).BMAP_STATUS_SUCCESS) {
+            const pt = r.point
             console.log('📡 [SDK] 百度 SDK 定位成功, 坐标:', pt.lat, pt.lng)
             applyPosition(pt.lat, pt.lng, 'BMapSDK')
           } else {
@@ -482,11 +535,11 @@ export default function MapPicker({ open, onClose, onConfirm, initialAddress, in
       console.warn('⚠️ [SDK] 百度 SDK 定位异常:', err)
     }
 
-    // 兜底：5 秒后如果都没结果，提示用户手动搜索
+    // 兜底：12 秒后如果都没结果，提示用户手动搜索
     setTimeout(() => {
       if (!mountedRef.current || settled) return
       console.warn('⏰ [LOCATE] 双源定位均超时，提示用户手动搜索')
-      alert('自动定位超时，请在搜索框中输入地址（如"郑州工商学院"）或在地图上点击选择')
+      alert('自动定位超时，请在搜索框中输入地址或在地图上点击选择')
     }, 12000)
   }
 
@@ -564,7 +617,7 @@ export default function MapPicker({ open, onClose, onConfirm, initialAddress, in
             <button onClick={handleSearch} className="px-4 py-2 bg-orange-500 text-white text-sm rounded-xl hover:bg-orange-600 transition-all whitespace-nowrap">
               搜索
             </button>
-            <button onClick={() => searchPoiAndLocate('郑州工商学院')} className="px-4 py-2 bg-blue-500 text-white text-sm rounded-xl hover:bg-blue-600 transition-all whitespace-nowrap" title="定位到郑州工商学院">
+            <button onClick={handleLocate} className="px-4 py-2 bg-blue-500 text-white text-sm rounded-xl hover:bg-blue-600 transition-all whitespace-nowrap" title="定位当前位置">
               📍
             </button>
           </div>
