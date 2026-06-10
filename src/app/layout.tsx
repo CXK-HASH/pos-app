@@ -31,7 +31,6 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <head>
-        {/* Dify 智能体：配置 + 样式 + 脚本，全量 HTML 标签嵌入 */}
         <style dangerouslySetInnerHTML={{
           __html: `
             #dify-chatbot-bubble-button {
@@ -44,17 +43,6 @@ export default function RootLayout({
             #dify-chatbot-bubble-window {
               position: fixed !important;
               z-index: 999999 !important;
-              width: 24rem !important;
-              height: 40rem !important;
-            }
-            @media (max-width: 768px) {
-              #dify-chatbot-bubble-window {
-                position: fixed !important;
-                width: calc(100% - 2rem) !important;
-                height: 75vh !important;
-                bottom: 5.5rem !important;
-                right: 1rem !important;
-              }
             }
           `
         }} />
@@ -72,7 +60,6 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-full flex flex-col bg-gray-50">
-        {/* 百度地图 SDK（getscript 方式，无 document.write） */}
         {mapAk && (
           <script
             dangerouslySetInnerHTML={{
@@ -89,8 +76,46 @@ export default function RootLayout({
         <Navbar />
         <main className="flex-1">{children}</main>
 
-        {/* Dify 智能体：embed.min.js 尾部门户注入 */}
+        {/* Dify 智能体嵌入 */}
         <script src="https://udify.app/embed.min.js" id="kXtniUYlZOuWJTKB"></script>
+
+        {/* 遮罩 + 点击空白关闭聊天框 */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                var overlay = document.createElement('div');
+                overlay.id = 'dify-overlay-close';
+                overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:999998;display:none;';
+                document.body.appendChild(overlay);
+
+                overlay.addEventListener('click', function(e) {
+                  if (e.target === overlay) {
+                    var btn = document.getElementById('dify-chatbot-bubble-button');
+                    if (btn) btn.click();
+                    overlay.style.display = 'none';
+                  }
+                });
+
+                // 监听到气泡窗口显示时，显示遮罩
+                var observer = new MutationObserver(function() {
+                  var win = document.getElementById('dify-chatbot-bubble-window');
+                  if (win) {
+                    overlay.style.display = win.style.display !== 'none' ? 'block' : 'none';
+                  }
+                });
+
+                // 等 embed.min.js 渲染完成后再观察
+                setTimeout(function() {
+                  var win = document.getElementById('dify-chatbot-bubble-window');
+                  if (win) {
+                    observer.observe(win, { attributes: true, attributeFilter: ['style'] });
+                  }
+                }, 2000);
+              })();
+            `
+          }}
+        />
       </body>
     </html>
   );
