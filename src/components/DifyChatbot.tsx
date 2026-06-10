@@ -21,12 +21,31 @@ export default function DifyChatbot() {
         userVariables: {},
       }
 
-      // 2. 添加样式
+      // 2. 添加样式（含移动端适配）
       const style = document.createElement('style')
       style.id = 'dify-custom-style'
       style.textContent = `
-        #dify-chatbot-bubble-button { background-color: #1C64F2 !important; }
-        #dify-chatbot-bubble-window { width: 24rem !important; height: 34rem !important; }
+        #dify-chatbot-bubble-button {
+          background-color: #1C64F2 !important;
+          z-index: 999999 !important;
+          bottom: 5rem !important;
+          right: 1.5rem !important;
+        }
+        #dify-chatbot-bubble-window {
+          z-index: 999999 !important;
+        }
+        @media (max-width: 768px) {
+          #dify-chatbot-bubble-window {
+            width: calc(100% - 2rem) !important;
+            height: 75vh !important;
+            bottom: 5rem !important;
+            right: 1rem !important;
+          }
+          #dify-chatbot-bubble-button {
+            bottom: 5rem !important;
+            right: 1.5rem !important;
+          }
+        }
       `
       document.head.appendChild(style)
 

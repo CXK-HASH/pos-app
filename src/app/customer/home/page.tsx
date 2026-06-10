@@ -6,6 +6,7 @@ import WeatherWidget from '@/components/WeatherWidget'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase/client'
+import { convertToBd09 } from '@/lib/coordConvert'
 
 type Merchant = {
   id: number
@@ -101,13 +102,22 @@ export default function CustomerHome() {
         return
       }
 
-      // 3. 无历史记录，尝试自动定位
+      // 3. 无历史记录，尝试自动定位（使用坐标转换防漂移）
       if (!navigator.geolocation) return
+      console.log('📡 [MOBILE_GPS] 正在请求手机硬件级 GPS 定位...')
       navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const lat = pos.coords.latitude
-          const lng = pos.coords.longitude
+        async (pos) => {
+          const wgsLat = pos.coords.latitude
+          const wgsLng = pos.coords.longitude
+          console.log('📍 [MOBILE_GPS] 原生坐标 (WGS-84):', wgsLat, wgsLng)
+
+          // 核心：转换 WGS-84 → BD-09（防21km漂移）
+          const bdCoord = await convertToBd09(wgsLat, wgsLng)
+          const { lat, lng } = bdCoord
+
           setCoords({ lat, lng })
+          console.log('✅ [MOBILE_GPS] 坐标转换完成 (BD-09):', lat, lng)
+
           if (typeof window !== 'undefined' && (window as any).BMap) {
             const pt = new (window as any).BMap.Point(lng, lat)
             const gc = new (window as any).BMap.Geocoder()
@@ -119,10 +129,17 @@ export default function CustomerHome() {
                 localStorage.setItem('customer_lat', String(lat))
               }
             })
+          } else {
+            // 百度 SDK 未就绪时至少保存转换后的坐标
+            localStorage.setItem('customer_lng', String(lng))
+            localStorage.setItem('customer_lat', String(lat))
           }
         },
-        () => {},
-        { enableHighAccuracy: true, timeout: 5000, maximumAge: 300000 }
+        (error) => {
+          console.error('❌ [MOBILE_GPS] 定位失败:', error.code, error.message)
+          // 不回落默认值——宁可没坐标也别给虚假的二七广场坐标
+        },
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 }
       )
     })()
   }, [])
