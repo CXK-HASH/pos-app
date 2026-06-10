@@ -3,7 +3,6 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Navbar from "@/components/Navbar";
 import Script from "next/script";
-import DifyChatbot from "@/components/DifyChatbot";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -33,7 +32,7 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <head>
-        {/* Dify 气泡全局最高层级提权样式 */}
+        {/* 强制注入最高权重的 CSS 空间提权 */}
         <style dangerouslySetInnerHTML={{
           __html: `
             #dify-chatbot-bubble-button {
@@ -43,14 +42,12 @@ export default function RootLayout({
               right: 1.5rem !important;
             }
             #dify-chatbot-bubble-window {
-              width: 24rem !important;
-              height: 40rem !important;
               z-index: 999999 !important;
             }
             @media (max-width: 768px) {
               #dify-chatbot-bubble-window {
                 width: calc(100% - 2rem) !important;
-                height: 70vh !important;
+                height: 75vh !important;
                 bottom: 5.5rem !important;
                 right: 1rem !important;
               }
@@ -59,7 +56,7 @@ export default function RootLayout({
         }} />
       </head>
       <body className="min-h-full flex flex-col bg-gray-50">
-        {/* 百度地图 SDK — afterInteractive 异步加载，避免 document.write 冲突 */}
+        {/* 百度地图 SDK — afterInteractive 异步加载 */}
         {mapAk ? (
           <Script
             src={`https://api.map.baidu.com/api?v=3.0&ak=${mapAk}&callback=onBMapLoaded`}
@@ -77,9 +74,9 @@ export default function RootLayout({
         <Navbar />
         <main className="flex-1">{children}</main>
 
-        {/* 增量补回 1：Dify 智能体核心运行时基础上下文 */}
+        {/* 纯净增量隔离点一：注入全局常驻的 window 基础配置环境 */}
         <Script
-          id="dify-chatbot-config-bind"
+          id="dify-independent-config"
           strategy="beforeInteractive"
           dangerouslySetInnerHTML={{
             __html: `
@@ -93,15 +90,28 @@ export default function RootLayout({
           }}
         />
 
-        {/* 增量补回 2：Dify 官方嵌入引擎包 */}
+        {/* 纯净增量隔离点二：强制拉回原生的右下角气泡渲染引擎 */}
         <Script
-          id="kXtniUYlZOuWJTKB"
+          id="dify-independent-engine"
           src="https://udify.app/embed.min.js"
           strategy="lazyOnload"
         />
 
-        {/* 消费者角色条件渲染（仅作控制显示，不重复注入脚本） */}
-        <DifyChatbot />
+        {/* onLoad 回调用独立的 script 写，绕过 Next.js Script onLoad 的 SSR 限制 */}
+        <Script
+          id="dify-independent-callback"
+          strategy="lazyOnload"
+          dangerouslySetInnerHTML={{
+            __html: `
+              setTimeout(function() {
+                var btn = document.getElementById('dify-chatbot-bubble-button');
+                if (btn) {
+                  console.log("🤖 [DIFY_BUBBLE_INDEPENDENT] 独立全局气泡已经成功强行接入，右下角安全亮起！");
+                }
+              }, 2000);
+            `
+          }}
+        />
       </body>
     </html>
   );
