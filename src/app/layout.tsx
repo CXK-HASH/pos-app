@@ -89,17 +89,19 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{
             __html: `
               (function() {
-                // 替换气泡 SVG 为更精致的聊天气泡图标
-                function upgradeIcon() {
+                // 在 embed.min.js 注入前 hook 掉 setSvgIcon，始终保留聊天气泡
+                var origSetSvg = window.setSvgIcon;
+                window.setSvgIcon = function() {};
+
+                // 固定气泡按钮内容为聊天气泡 SVG
+                function fixIcon() {
                   var icon = document.getElementById('openIcon');
                   if (!icon) return;
-                  // 清空原有路径
                   while (icon.firstChild) icon.removeChild(icon.firstChild);
                   icon.setAttribute('viewBox', '0 0 24 24');
                   icon.setAttribute('width', '28');
                   icon.setAttribute('height', '28');
                   icon.setAttribute('fill', 'none');
-                  // 聊天气泡路径 — 圆角气泡+三条波浪线
                   var svgNS = 'http://www.w3.org/2000/svg';
                   var p1 = document.createElementNS(svgNS, 'path');
                   p1.setAttribute('fill-rule', 'evenodd');
@@ -109,7 +111,10 @@ export default function RootLayout({
                   icon.appendChild(p1);
                 }
 
-                setTimeout(upgradeIcon, 2000);
+                // 等 embed.min.js 渲染完成后固定图标
+                setTimeout(fixIcon, 2000);
+                // 并周期性修复（防止 embed.min.js 后续切换）
+                setInterval(fixIcon, 3000);
 
                 var overlay = document.createElement('div');
                 overlay.id = 'dify-overlay-close';
