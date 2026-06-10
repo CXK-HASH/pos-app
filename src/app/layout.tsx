@@ -44,9 +44,12 @@ export default function RootLayout({
               position: fixed !important;
               z-index: 999999 !important;
             }
-            /* 隐藏右上角关闭叉号 */
             #closeIcon {
               display: none !important;
+            }
+            #dify-chatbot-bubble-button svg {
+              width: 28px !important;
+              height: 28px !important;
             }
           `
         }} />
@@ -80,14 +83,34 @@ export default function RootLayout({
         <Navbar />
         <main className="flex-1">{children}</main>
 
-        {/* Dify 智能体嵌入 */}
         <script src="https://udify.app/embed.min.js" id="kXtniUYlZOuWJTKB"></script>
 
-        {/* 遮罩 + 点击空白关闭聊天框 */}
         <script
           dangerouslySetInnerHTML={{
             __html: `
               (function() {
+                // 替换气泡 SVG 为更精致的聊天气泡图标
+                function upgradeIcon() {
+                  var icon = document.getElementById('openIcon');
+                  if (!icon) return;
+                  // 清空原有路径
+                  while (icon.firstChild) icon.removeChild(icon.firstChild);
+                  icon.setAttribute('viewBox', '0 0 24 24');
+                  icon.setAttribute('width', '28');
+                  icon.setAttribute('height', '28');
+                  icon.setAttribute('fill', 'none');
+                  // 聊天气泡路径 — 圆角气泡+三条波浪线
+                  var svgNS = 'http://www.w3.org/2000/svg';
+                  var p1 = document.createElementNS(svgNS, 'path');
+                  p1.setAttribute('fill-rule', 'evenodd');
+                  p1.setAttribute('clip-rule', 'evenodd');
+                  p1.setAttribute('d', 'M4 2C2.895 2 2 2.895 2 4v12c0 1.105.895 2 2 2h2v3a1 1 0 001.625.78L13.414 18H20c1.105 0 2-.895 2-2V4c0-1.105-.895-2-2-2H4zm2 4a1 1 0 011-1h10a1 1 0 110 2H7a1 1 0 01-1-1zm0 4a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm0 4a1 1 0 011-1h3a1 1 0 110 2H7a1 1 0 01-1-1z');
+                  p1.setAttribute('fill', 'white');
+                  icon.appendChild(p1);
+                }
+
+                setTimeout(upgradeIcon, 2000);
+
                 var overlay = document.createElement('div');
                 overlay.id = 'dify-overlay-close';
                 overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:999998;display:none;';
@@ -107,14 +130,10 @@ export default function RootLayout({
                   }
                 }
 
-                // 点击遮罩关闭
                 overlay.addEventListener('click', function(e) {
-                  if (e.target === overlay) {
-                    toggleBubble(false);
-                  }
+                  if (e.target === overlay) toggleBubble(false);
                 });
 
-                // 点击气泡按钮：开
                 document.addEventListener('click', function(e) {
                   var btn = document.getElementById('dify-chatbot-bubble-button');
                   if (btn && (e.target === btn || btn.contains(e.target))) {
@@ -124,7 +143,6 @@ export default function RootLayout({
                   }
                 });
 
-                // 监听气泡按钮点击（兼顾原生 toggle）
                 document.addEventListener('click', function(e) {
                   var btn = document.getElementById('dify-chatbot-bubble-button');
                   if (btn && (e.target === btn || btn.contains(e.target))) {
@@ -138,7 +156,6 @@ export default function RootLayout({
                   }
                 });
 
-                // 监听叉号点击（虽然在 CSS 中隐藏，但原生 Dify 可能有键盘关闭）
                 document.addEventListener('click', function(e) {
                   var win = document.getElementById('dify-chatbot-bubble-window');
                   if (win && win.style.display === 'none') {
@@ -148,13 +165,9 @@ export default function RootLayout({
                   }
                 });
 
-                // 等 embed.min.js 渲染完成
                 setTimeout(function() {
                   var win = document.getElementById('dify-chatbot-bubble-window');
-                  if (win) {
-                    // 初始状态：隐藏窗口
-                    win.style.display = 'none';
-                  }
+                  if (win) win.style.display = 'none';
                 }, 2000);
               })();
             `
