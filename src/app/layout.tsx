@@ -32,6 +32,32 @@ export default function RootLayout({
       lang="zh-CN"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
+      <head>
+        {/* Dify 气泡全局最高层级提权样式 */}
+        <style dangerouslySetInnerHTML={{
+          __html: `
+            #dify-chatbot-bubble-button {
+              background-color: #1C64F2 !important;
+              z-index: 999999 !important;
+              bottom: 6rem !important;
+              right: 1.5rem !important;
+            }
+            #dify-chatbot-bubble-window {
+              width: 24rem !important;
+              height: 40rem !important;
+              z-index: 999999 !important;
+            }
+            @media (max-width: 768px) {
+              #dify-chatbot-bubble-window {
+                width: calc(100% - 2rem) !important;
+                height: 70vh !important;
+                bottom: 5.5rem !important;
+                right: 1rem !important;
+              }
+            }
+          `
+        }} />
+      </head>
       <body className="min-h-full flex flex-col bg-gray-50">
         {/* 百度地图 SDK — afterInteractive 异步加载，避免 document.write 冲突 */}
         {mapAk ? (
@@ -50,6 +76,34 @@ export default function RootLayout({
         )}
         <Navbar />
         <main className="flex-1">{children}</main>
+
+        {/* 增量补回 1：Dify 智能体核心运行时基础上下文 */}
+        <Script
+          id="dify-chatbot-config-bind"
+          strategy="beforeInteractive"
+          dangerouslySetInnerHTML={{
+            __html: `
+              window.difyChatbotConfig = {
+                token: 'kXtniUYlZOuWJTKB',
+                inputs: {},
+                systemVariables: {},
+                userVariables: {}
+              };
+            `
+          }}
+        />
+
+        {/* 增量补回 2：Dify 官方嵌入引擎包 */}
+        <Script
+          id="kXtniUYlZOuWJTKB"
+          src="https://udify.app/embed.min.js"
+          strategy="lazyOnload"
+          onLoad={() => {
+            console.log("🤖 [DIFY_RESTORE_SUCCESS] 专属 AI 客服已成功精准补回，右下角气泡重新上线！");
+          }}
+        />
+
+        {/* 消费者角色条件渲染（仅作控制显示，不重复注入脚本） */}
         <DifyChatbot />
       </body>
     </html>

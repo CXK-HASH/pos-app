@@ -4,67 +4,41 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
 
 /**
- * Dify 智能体注入容器
- * 仅在消费者角色下注入 embed.min.js
- * 使用 script 标签方式（用户要求的 exact 方式）
+ * Dify 智能体消费者角色守卫
+ * 脚本和样式已在 layout.tsx 全局注入
+ * 此组件仅用于在非消费者角色下隐藏 Dify 气泡
  */
 export default function DifyChatbot() {
-  const [isCustomer, setIsCustomer] = useState(false)
+  const [visible, setVisible] = useState(false)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user?.user_metadata?.role === 'customer') {
-        setIsCustomer(true)
-      }
+      const isCustomer = session?.user?.user_metadata?.role === 'customer'
+      setVisible(isCustomer)
     })
   }, [])
 
-  if (!isCustomer) return null
+  useEffect(() => {
+    if (!visible) {
+      // 非消费者角色：隐藏 Dify 气泡
+      const hideDify = () => {
+        const btn = document.getElementById('dify-chatbot-bubble-button')
+        const win = document.getElementById('dify-chatbot-bubble-window')
+        if (btn) btn.style.display = 'none'
+        if (win) win.style.display = 'none'
+      }
+      // embed.min.js 可能还没渲染，轮询等它出现
+      hideDify()
+      const timer = setInterval(() => {
+        const btn = document.getElementById('dify-chatbot-bubble-button')
+        if (btn) {
+          hideDify()
+          clearInterval(timer)
+        }
+      }, 300)
+      setTimeout(() => clearInterval(timer), 5000)
+    }
+  }, [visible])
 
-  return (
-    <>
-      {/* 全局样式提权 */}
-      <style dangerouslySetInnerHTML={{
-        __html: `
-          #dify-chatbot-bubble-button {
-            background-color: #1C64F2 !important;
-            z-index: 999999 !important;
-            bottom: 6rem !important;
-            right: 1.5rem !important;
-          }
-          #dify-chatbot-bubble-window {
-            z-index: 999999 !important;
-          }
-          @media (max-width: 768px) {
-            #dify-chatbot-bubble-window {
-              width: calc(100% - 2rem) !important;
-              height: 70vh !important;
-              bottom: 5.5rem !important;
-              right: 1rem !important;
-            }
-          }
-        `
-      }} />
-
-      {/* 配置注入 */}
-      <script
-        dangerouslySetInnerHTML={{
-          __html: `
-            window.difyChatbotConfig = {
-              token: 'kXtniUYlZOuWJTKB',
-              inputs: {},
-              systemVariables: {},
-              userVariables: {}
-            };
-          `
-        }}
-      />
-
-      {/* 核心脚本 — 不用 defer */}
-      <script
-        src="https://udify.app/embed.min.js"
-        id="kXtniUYlZOuWJTKB"
-      />
-    </>
-  )
+  return null
 }
