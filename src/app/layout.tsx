@@ -36,9 +36,18 @@ export default function RootLayout({
             #dify-chatbot-bubble-button {
               position: fixed !important;
               background-color: #1C64F2 !important;
+              background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 24 24' fill='none'%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M4 2C2.895 2 2 2.895 2 4v12c0 1.105.895 2 2 2h2v3a1 1 0 001.625.78L13.414 18H20c1.105 0 2-.895 2-2V4c0-1.105-.895-2-2-2H4zm2 4a1 1 0 011-1h10a1 1 0 110 2H7a1 1 0 01-1-1zm0 4a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm0 4a1 1 0 011-1h3a1 1 0 110 2H7a1 1 0 01-1-1z' fill='white'/%3E%3C/svg%3E") !important;
+              background-repeat: no-repeat !important;
+              background-position: center !important;
+              background-size: 28px !important;
               z-index: 999999 !important;
               bottom: 6rem !important;
               right: 1.5rem !important;
+            }
+            #dify-chatbot-bubble-button svg,
+            #dify-chatbot-bubble-button #openIcon,
+            #dify-chatbot-bubble-button #closeIcon {
+              display: none !important;
             }
             #dify-chatbot-bubble-window {
               position: fixed !important;
@@ -89,91 +98,44 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{
             __html: `
               (function() {
-                // 在 embed.min.js 注入前 hook 掉 setSvgIcon，始终保留聊天气泡
-                var origSetSvg = window.setSvgIcon;
-                window.setSvgIcon = function() {};
-
-                // 固定气泡按钮内容为聊天气泡 SVG
-                function fixIcon() {
-                  var icon = document.getElementById('openIcon');
-                  if (!icon) return;
-                  while (icon.firstChild) icon.removeChild(icon.firstChild);
-                  icon.setAttribute('viewBox', '0 0 24 24');
-                  icon.setAttribute('width', '28');
-                  icon.setAttribute('height', '28');
-                  icon.setAttribute('fill', 'none');
-                  var svgNS = 'http://www.w3.org/2000/svg';
-                  var p1 = document.createElementNS(svgNS, 'path');
-                  p1.setAttribute('fill-rule', 'evenodd');
-                  p1.setAttribute('clip-rule', 'evenodd');
-                  p1.setAttribute('d', 'M4 2C2.895 2 2 2.895 2 4v12c0 1.105.895 2 2 2h2v3a1 1 0 001.625.78L13.414 18H20c1.105 0 2-.895 2-2V4c0-1.105-.895-2-2-2H4zm2 4a1 1 0 011-1h10a1 1 0 110 2H7a1 1 0 01-1-1zm0 4a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm0 4a1 1 0 011-1h3a1 1 0 110 2H7a1 1 0 01-1-1z');
-                  p1.setAttribute('fill', 'white');
-                  icon.appendChild(p1);
-                }
-
-                // 等 embed.min.js 渲染完成后固定图标
-                setTimeout(fixIcon, 2000);
-                // 并周期性修复（防止 embed.min.js 后续切换）
-                setInterval(fixIcon, 3000);
-
+                // 方式：不让按钮内容变动，用 MutationObserver 监控窗口状态
                 var overlay = document.createElement('div');
                 overlay.id = 'dify-overlay-close';
-                overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:999998;display:none;';
+                overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:999998;display:none;background:transparent;';
                 document.body.appendChild(overlay);
 
-                function toggleBubble(show) {
-                  var btn = document.getElementById('dify-chatbot-bubble-button');
-                  var win = document.getElementById('dify-chatbot-bubble-window');
-                  if (show) {
-                    if (btn) btn.style.display = 'none';
-                    if (win) win.style.display = '';
-                    overlay.style.display = 'block';
-                  } else {
-                    if (btn) btn.style.display = '';
-                    if (win) win.style.display = 'none';
+                overlay.addEventListener('click', function(e) {
+                  if (e.target === overlay) {
+                    var btn = document.getElementById('dify-chatbot-bubble-button');
+                    if (btn) btn.click();
                     overlay.style.display = 'none';
+                  }
+                });
+
+                // 监控气泡窗口的显示状态，同步按钮显示/隐藏
+                function watchBubble() {
+                  var win = document.getElementById('dify-chatbot-bubble-window');
+                  var btn = document.getElementById('dify-chatbot-bubble-button');
+                  if (!win || !btn) { setTimeout(watchBubble, 500); return; }
+
+                  var observer = new MutationObserver(function() {
+                    if (win.style.display !== 'none' && win.style.visibility !== 'hidden' && win.style.opacity !== '0') {
+                      btn.style.display = 'none';
+                      overlay.style.display = 'block';
+                    } else {
+                      btn.style.display = '';
+                      overlay.style.display = 'none';
+                    }
+                  });
+                  observer.observe(win, { attributes: true, attributeFilter: ['style', 'class'] });
+
+                  // 初始检查
+                  if (win.style.display !== 'none') {
+                    btn.style.display = 'none';
+                    overlay.style.display = 'block';
                   }
                 }
-
-                overlay.addEventListener('click', function(e) {
-                  if (e.target === overlay) toggleBubble(false);
-                });
-
-                document.addEventListener('click', function(e) {
-                  var btn = document.getElementById('dify-chatbot-bubble-button');
-                  if (btn && (e.target === btn || btn.contains(e.target))) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    toggleBubble(true);
-                  }
-                });
-
-                document.addEventListener('click', function(e) {
-                  var btn = document.getElementById('dify-chatbot-bubble-button');
-                  if (btn && (e.target === btn || btn.contains(e.target))) {
-                    setTimeout(function() {
-                      var win = document.getElementById('dify-chatbot-bubble-window');
-                      if (win && win.style.display !== 'none') {
-                        btn.style.display = 'none';
-                        overlay.style.display = 'block';
-                      }
-                    }, 100);
-                  }
-                });
-
-                document.addEventListener('click', function(e) {
-                  var win = document.getElementById('dify-chatbot-bubble-window');
-                  if (win && win.style.display === 'none') {
-                    var btn = document.getElementById('dify-chatbot-bubble-button');
-                    if (btn) btn.style.display = '';
-                    overlay.style.display = 'none';
-                  }
-                });
-
-                setTimeout(function() {
-                  var win = document.getElementById('dify-chatbot-bubble-window');
-                  if (win) win.style.display = 'none';
-                }, 2000);
+                setTimeout(watchBubble, 2000);
               })();
             `
           }}
