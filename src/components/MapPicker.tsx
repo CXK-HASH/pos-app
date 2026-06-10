@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { getLocationWithGuard } from '@/lib/baiduGuard'
+import { convertToBd09 } from '@/lib/coordConvert'
 
 declare global {
   interface Window {
@@ -360,27 +361,91 @@ export default function MapPicker({ open, onClose, onConfirm, initialAddress, in
     setShowSuggestions(false)
   }
 
-  // ==================== 当前定位 ====================
+  // ==================== 当前定位（HTML5 GPS 高精度优先，IP 降级兜底）====================
   const handleLocate = () => {
     if (!map || !(window as any).BMap || !mountedRef.current) return
-    try {
-      const geolocation = new (window as any).BMap.Geolocation()
-      geolocation.enableSDKLocation()
-      geolocation.getCurrentPosition(
-        function (this: any, r: any) {
+
+    // 方案一：HTML5 GPS 高精度优先
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
           if (!mountedRef.current) return
-          if (this.getStatus() === (window as any).BMAP_STATUS_SUCCESS) {
-            const pt = r.point
-            console.log('🎯 [MAP_LOCATION_DEBUG] 高精度定位坐标:', pt.lat, pt.lng)
+          const wgsLat = pos.coords.latitude
+          const wgsLng = pos.coords.longitude
+          console.log('🎯 [GPS] HTML5 GPS 获取到精确坐标（WGS-84）:', wgsLat, wgsLng)
+
+          // 转 BD-09
+          convertToBd09(wgsLat, wgsLng).then((bdCoord: { lat: number; lng: number }) => {
+            if (!mountedRef.current) return
+            const { lat, lng } = bdCoord
+            console.log('🎯 [GPS] BD-09 坐标:', lat, lng)
+
             map.clearOverlays()
-            map.centerAndZoom(pt, 16)
+            map.centerAndZoom(new (window as any).BMap.Point(lng, lat), 17)
+            const newMk = new (window as any).BMap.Marker(new (window as any).BMap.Point(lng, lat))
+            newMk.enableDragging()
+            map.addOverlay(newMk)
+            setMarker(newMk)
+            setSelectedLat(lat)
+            setSelectedLng(lng)
+
+            // 逆地理编码取精确地址
+            getLocationWithGuard(
+              lng, lat,
+              (rs: any) => {
+                if (!mountedRef.current) return
+                const addComp = rs?.addressComponents
+                if (!addComp) {
+                  setSelectedAddress(`${lat.toFixed(4)}, ${lng.toFixed(4)}`)
+                  return
+                }
+                const baseArea = `${addComp.province || ''}${addComp.city || ''}${addComp.district || ''}`.replace(/undefined/gi, '')
+                const primaryPoi = rs?.surroundingPois?.[0]
+                const poiTitle = primaryPoi?.title || ''
+                let finalAddr: string
+                if (poiTitle) {
+                  finalAddr = `${baseArea}${poiTitle}`
+                  console.log('🏢 [POI_PRECISE_DEBUG] 精准地标捕获:', finalAddr, '| POI:', primaryPoi)
+                } else {
+                  const streetInfo = `${addComp.street || ''}${addComp.streetNumber || ''}`.replace(/undefined/gi, '')
+                  finalAddr = `${baseArea}${streetInfo}` || `${lat.toFixed(4)}, ${lng.toFixed(4)}`
+                }
+                finalAddr = finalAddr.replace(/undefined/gi, '').trim()
+                setSelectedAddress(finalAddr)
+                setSearchText(finalAddr)
+              },
+            )
+          })
+        },
+        // GPS 失败 → 方案二：百度 SDK IP 定位降级
+        (err) => {
+          console.warn('⚠️ [GPS] HTML5 GPS 失败:', err.code, err.message, '— 降级到百度 IP 定位')
+          fallbackIpLocate()
+        },
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+      )
+    } else {
+      fallbackIpLocate()
+    }
+
+    function fallbackIpLocate() {
+      try {
+        const geolocation = new (window as any).BMap.Geolocation()
+        geolocation.enableSDKLocation()
+        geolocation.getCurrentPosition(
+          function (this: any, r: any) {
+            if (!mountedRef.current) return
+            const pt = r.point
+            console.log('🎯 [IP] 百度 IP 定位结果:', pt.lat, pt.lng)
+            map.clearOverlays()
+            map.centerAndZoom(pt, 15)
             const newMk = new (window as any).BMap.Marker(pt)
             newMk.enableDragging()
             map.addOverlay(newMk)
             setMarker(newMk)
             setSelectedLat(pt.lat)
             setSelectedLng(pt.lng)
-            // POI 级精确定位：优先提取 surroundingPois[0].title 地标建筑名（带防抖）
+
             getLocationWithGuard(
               pt.lng, pt.lat,
               (rs: any) => {
@@ -391,13 +456,11 @@ export default function MapPicker({ open, onClose, onConfirm, initialAddress, in
                   return
                 }
                 const baseArea = `${addComp.province || ''}${addComp.city || ''}${addComp.district || ''}`.replace(/undefined/gi, '')
-                // 提取最近 POI 建筑名
                 const primaryPoi = rs?.surroundingPois?.[0]
                 const poiTitle = primaryPoi?.title || ''
                 let finalAddr: string
                 if (poiTitle) {
                   finalAddr = `${baseArea}${poiTitle}`
-                  console.log('🏢 [POI_PRECISE_DEBUG] 精准地标捕获:', finalAddr, '| POI:', primaryPoi)
                 } else {
                   const streetInfo = `${addComp.street || ''}${addComp.streetNumber || ''}`.replace(/undefined/gi, '')
                   finalAddr = `${baseArea}${streetInfo}` || `${pt.lat.toFixed(4)}, ${pt.lng.toFixed(4)}`
@@ -407,52 +470,13 @@ export default function MapPicker({ open, onClose, onConfirm, initialAddress, in
                 setSearchText(finalAddr)
               },
             )
-          } else {
-            console.warn('⚠️ [MAP_LOCATION_DEBUG] 高精度定位失败，状态码:', this.getStatus(), '— IP 定位降级')
-            if (r && r.point && mountedRef.current) {
-              const pt = r.point
-              map.clearOverlays()
-              map.centerAndZoom(pt, 14)
-              const newMk = new (window as any).BMap.Marker(pt)
-              map.addOverlay(newMk)
-              setMarker(newMk)
-              setSelectedLat(pt.lat)
-              setSelectedLng(pt.lng)
-              // POI 级精确定位（IP降级分支，带防抖）
-              getLocationWithGuard(
-                pt.lng, pt.lat,
-                (rs: any) => {
-                  if (!mountedRef.current) return
-                  const addComp = rs?.addressComponents
-                  if (!addComp) return
-                  const baseArea = `${addComp.province || ''}${addComp.city || ''}${addComp.district || ''}`.replace(/undefined/gi, '')
-                  const primaryPoi = rs?.surroundingPois?.[0]
-                  const poiTitle = primaryPoi?.title || ''
-                  let finalAddr: string
-                  if (poiTitle) {
-                    finalAddr = `${baseArea}${poiTitle}`
-                    console.log('🏢 [POI_PRECISE_DEBUG] IP降级-精准地标:', finalAddr)
-                  } else {
-                    const streetInfo = `${addComp.street || ''}${addComp.streetNumber || ''}`.replace(/undefined/gi, '')
-                    finalAddr = `${baseArea}${streetInfo}` || `${pt.lat.toFixed(4)}, ${pt.lng.toFixed(4)}`
-                  }
-                  finalAddr = finalAddr.replace(/undefined/gi, '').trim()
-                  setSelectedAddress(finalAddr)
-                  setSearchText(finalAddr)
-                },
-                )
-            }
-          }
-        },
-        {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 0,
-        }
-      )
-    } catch (err) {
-      console.error('❌ [MAP_LOCATION_DEBUG] 定位异常:', err)
-      alert('定位异常，请刷新后重试')
+          },
+          { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        )
+      } catch (err) {
+        console.error('❌ [LOCATE] 定位异常:', err)
+        alert('定位异常，请刷新后重试')
+      }
     }
   }
 

@@ -2,10 +2,11 @@
  * 百度地图 API 防抖拦截器
  * 
  * 防止高频渲染时对百度地图 Geocoder 造成并发轰炸
- * 使用 localStorage 10 分钟缓存 + 相同坐标命中拦截
+ * 使用 localStorage 10 分钟缓存 + 相同坐标命中拦截 + 并发队列控制
  */
 
 const CACHE_TTL = 10 * 60 * 1000 // 10 分钟
+const MAX_CONCURRENCY = 3 // 最大并发逆地理编码请求数
 
 interface GeoCachePayload {
   addressComponents: any
@@ -13,9 +14,27 @@ interface GeoCachePayload {
   surroundingPois: any[]
 }
 
+// 并发队列
+let activeCount = 0
+const queue: Array<{ fn: () => void }> = []
+
+function processQueue() {
+  while (activeCount < MAX_CONCURRENCY && queue.length > 0) {
+    const task = queue.shift()
+    if (task) {
+      activeCount++
+      task.fn()
+    }
+  }
+}
+
+function dequeue() {
+  activeCount = Math.max(0, activeCount - 1)
+  processQueue()
+}
+
 /**
- * 包装后的逆地理编码函数，带防抖+缓存拦截
- * @param lng 经度
+ * 包装后的逆地理编码函数，带防抖+缓存拦截+并发控制
  * @param lng 经度
  * @param lat 纬度
  * @param callback 成功回调
@@ -48,34 +67,53 @@ export function getLocationWithGuard(
       }
       return
     }
-
-    // 放行 → 调用百度 API
-    const geoc = new (window as any).BMap.Geocoder()
-    geoc.getLocation(
-      new (window as any).BMap.Point(lng, lat),
-      (rs: any) => {
-        try {
-          const payload: GeoCachePayload = {
-            addressComponents: rs.addressComponents,
-            business: rs.business,
-            surroundingPois: rs.surroundingPois || [],
-          }
-          localStorage.setItem(cacheKey, JSON.stringify(payload))
-          localStorage.setItem(`${cacheKey}_time`, now.toString())
-        } catch (e) {
-          // localStorage 写满等场景静默失败
-        }
-        callback(rs)
-      },
-      { poiRadius: 150, numPois: 12 }
-    )
   } catch (e) {
-    // localStorage 不可用时降级
-    const geoc = new (window as any).BMap.Geocoder()
-    geoc.getLocation(
-      new (window as any).BMap.Point(lng, lat),
-      callback,
-      { poiRadius: 150, numPois: 12 }
-    )
+    // localStorage 不可用，走队列放行
   }
+
+  // 加入并发队列
+  const doRequest = () => {
+    try {
+      const geoc = new (window as any).BMap.Geocoder()
+      geoc.getLocation(
+        new (window as any).BMap.Point(lng, lat),
+        (rs: any) => {
+          try {
+            const payload: GeoCachePayload = {
+              addressComponents: rs.addressComponents,
+              business: rs.business,
+              surroundingPois: rs.surroundingPois || [],
+            }
+            localStorage.setItem(cacheKey, JSON.stringify(payload))
+            localStorage.setItem(`${cacheKey}_time`, now.toString())
+          } catch (e) {
+            // localStorage 写满等场景静默失败
+          }
+          callback(rs)
+          dequeue()
+        },
+        { poiRadius: 150, numPois: 12 }
+      )
+    } catch (e) {
+      if (onError) onError(e)
+      dequeue()
+    }
+  }
+
+  queue.push({ fn: doRequest })
+  processQueue()
+}
+
+/**
+ * 获取当前活跃的逆地理编码请求数
+ */
+export function getActiveGeoCoderCount(): number {
+  return activeCount
+}
+
+/**
+ * 获取当前队列中等待的请求数
+ */
+export function getQueuedGeoCoderCount(): number {
+  return queue.length
 }
