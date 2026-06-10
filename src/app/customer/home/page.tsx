@@ -6,6 +6,7 @@ import WeatherWidget from '@/components/WeatherWidget'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase/client'
+import { getLocationWithGuard } from '@/lib/baiduGuard'
 import { convertToBd09 } from '@/lib/coordConvert'
 
 type Merchant = {
@@ -119,9 +120,9 @@ export default function CustomerHome() {
           console.log('✅ [MOBILE_GPS] 坐标转换完成 (BD-09):', lat, lng)
 
           if (typeof window !== 'undefined' && (window as any).BMap) {
-            const pt = new (window as any).BMap.Point(lng, lat)
-            const gc = new (window as any).BMap.Geocoder()
-            gc.getLocation(pt, (rs: any) => {
+            getLocationWithGuard(
+              lng, lat,
+              (rs: any) => {
               if (rs?.address) {
                 setAddress(rs.address)
                 localStorage.setItem('customer_address', rs.address)
@@ -285,9 +286,8 @@ export default function CustomerHome() {
     // 逆地理取 adcode 写 localStorage，触发天气组件联动刷新（带防抖拦截）
     if (typeof window !== 'undefined' && (window as any).BMap) {
       try {
-        const gc = new (window as any).BMap.Geocoder()
-        gc.getLocation(
-          new (window as any).BMap.Point(lng, lat),
+        getLocationWithGuard(
+          lng, lat,
           (rs: any) => {
           const adcode = rs?.addressComponents?.adcode
           if (adcode) {

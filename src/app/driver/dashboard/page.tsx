@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import NavigationMap from '@/components/NavigationMap'
 import MapPicker from '@/components/MapPicker'
 import { getDistance, formatDistance } from '@/lib/distance'
+import { getLocationWithGuard } from '@/lib/baiduGuard'
 
 type Order = {
   id: number
@@ -435,12 +436,12 @@ export default function DriverDashboard() {
             localStorage.setItem('driver_address', addr)
             localStorage.setItem('driver_lat', String(lat))
             localStorage.setItem('driver_lng', String(lng))
-            // 联动天气：提取 adcode
+            // 联动天气：提取 adcode（带防抖拦截）
             if (typeof window !== 'undefined' && (window as any).BMap) {
               try {
-                const pt = new (window as any).BMap.Point(lng, lat)
-                const gc = new (window as any).BMap.Geocoder()
-                gc.getLocation(pt, (rs: any) => {
+                getLocationWithGuard(
+                  lng, lat,
+                  (rs: any) => {
                   const adcode = rs?.addressComponents?.adcode
                   if (adcode) localStorage.setItem('driver_adcode', String(adcode))
                   window.dispatchEvent(new Event('storage'))
