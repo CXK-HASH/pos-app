@@ -394,72 +394,100 @@ export default function MapPicker({ open, onClose, onConfirm, initialAddress, in
     }
   }
 
-  // ==================== 当前定位（纯 HTML5 GPS，无需降级）====================
+  // ==================== 当前定位（HTML5 GPS + 百度 SDK 双源竞争，取精度高的）====================
   const handleLocate = () => {
     if (!map || !(window as any).BMap || !mountedRef.current) return
 
-    if (!navigator.geolocation) {
-      alert('您的浏览器不支持 GPS 定位，请搜索地址或在地图上点击选择')
-      return
+    let bestLat = 0
+    let bestLng = 0
+    let bestAccuracy = Infinity
+    let settled = false
+
+    const applyPosition = (lat: number, lng: number, source: string) => {
+      if (!mountedRef.current || settled) return
+      settled = true
+      console.log('🎯 [LOCATE] 选用来源:', source, '坐标:', lat, lng)
+
+      convertToBd09(lat, lng).then((bdCoord) => {
+        if (!mountedRef.current) return
+        const { lat: bdLat, lng: bdLng } = bdCoord
+        map!.clearOverlays()
+        map!.centerAndZoom(new (window as any).BMap.Point(bdLng, bdLat), 17)
+        const newMk = new (window as any).BMap.Marker(new (window as any).BMap.Point(bdLng, bdLat))
+        newMk.enableDragging()
+        map!.addOverlay(newMk)
+        setMarker(newMk)
+        setSelectedLat(bdLat)
+        setSelectedLng(bdLng)
+
+        getLocationWithGuard(bdLng, bdLat, (rs: any) => {
+          if (!mountedRef.current) return
+          const addComp = rs?.addressComponents
+          if (!addComp) {
+            setSelectedAddress(`${bdLat.toFixed(4)}, ${bdLng.toFixed(4)}`)
+            return
+          }
+          const baseArea = `${addComp.province || ''}${addComp.city || ''}${addComp.district || ''}`.replace(/undefined/gi, '')
+          const primaryPoi = rs?.surroundingPois?.[0]
+          const poiTitle = primaryPoi?.title || ''
+          let finalAddr = baseArea + (poiTitle || `${addComp.street || ''}${addComp.streetNumber || ''}`)
+          finalAddr = finalAddr.replace(/undefined/gi, '').trim() || `${bdLat.toFixed(4)}, ${bdLng.toFixed(4)}`
+          setSelectedAddress(finalAddr)
+          setSearchText(finalAddr)
+        })
+      })
     }
 
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        if (!mountedRef.current) return
-        const wgsLat = pos.coords.latitude
-        const wgsLng = pos.coords.longitude
-        console.log('🎯 [GPS] HTML5 GPS 获取到精确坐标（WGS-84）:', wgsLat, wgsLng)
+    // 源1：HTML5 GPS
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          if (!mountedRef.current || settled) return
+          const acc = pos.coords.accuracy || Infinity
+          console.log('📡 [GPS] HTML5 返回, accuracy:', acc, '坐标:', pos.coords.latitude, pos.coords.longitude)
+          // accuracy ≤ 200 米才算准（Wi-Fi定位一般 50-200m）
+          if (acc < bestAccuracy && acc <= 500) {
+            bestAccuracy = acc
+            bestLat = pos.coords.latitude
+            bestLng = pos.coords.longitude
+            applyPosition(bestLat, bestLng, 'GPS(' + acc.toFixed(0) + 'm)')
+          }
+        },
+        (err) => {
+          console.warn('⚠️ [GPS] HTML5 失败:', err.code, err.message)
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      )
+    }
 
-        // 转 BD-09
-        convertToBd09(wgsLat, wgsLng).then((bdCoord: { lat: number; lng: number }) => {
-          if (!mountedRef.current) return
-          const { lat, lng } = bdCoord
-          console.log('🎯 [GPS] BD-09 坐标:', lat, lng)
+    // 源2：百度 SDK Geolocation（含 Wi-Fi 指纹）
+    try {
+      const geolocation = new (window as any).BMap.Geolocation()
+      geolocation.enableSDKLocation()
+      geolocation.getCurrentPosition(
+        function (this: any, r: any) {
+          if (!mountedRef.current || settled) return
+          const pt = r.point
+          // 百度没有 accuracy，但如果状态成功就认为可用
+          if (this.getStatus() === (window as any).BMAP_STATUS_SUCCESS) {
+            console.log('📡 [SDK] 百度 SDK 定位成功, 坐标:', pt.lat, pt.lng)
+            applyPosition(pt.lat, pt.lng, 'BMapSDK')
+          } else {
+            console.warn('⚠️ [SDK] 百度 SDK 定位失败, 状态:', this.getStatus())
+          }
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      )
+    } catch (err) {
+      console.warn('⚠️ [SDK] 百度 SDK 定位异常:', err)
+    }
 
-          map.clearOverlays()
-          map.centerAndZoom(new (window as any).BMap.Point(lng, lat), 17)
-          const newMk = new (window as any).BMap.Marker(new (window as any).BMap.Point(lng, lat))
-          newMk.enableDragging()
-          map.addOverlay(newMk)
-          setMarker(newMk)
-          setSelectedLat(lat)
-          setSelectedLng(lng)
-
-          // 逆地理编码取精确地址
-          getLocationWithGuard(
-            lng, lat,
-            (rs: any) => {
-              if (!mountedRef.current) return
-              const addComp = rs?.addressComponents
-              if (!addComp) {
-                setSelectedAddress(`${lat.toFixed(4)}, ${lng.toFixed(4)}`)
-                return
-              }
-              const baseArea = `${addComp.province || ''}${addComp.city || ''}${addComp.district || ''}`.replace(/undefined/gi, '')
-              const primaryPoi = rs?.surroundingPois?.[0]
-              const poiTitle = primaryPoi?.title || ''
-              let finalAddr: string
-              if (poiTitle) {
-                finalAddr = `${baseArea}${poiTitle}`
-                console.log('🏢 [POI_PRECISE_DEBUG] 精准地标捕获:', finalAddr, '| POI:', primaryPoi)
-              } else {
-                const streetInfo = `${addComp.street || ''}${addComp.streetNumber || ''}`.replace(/undefined/gi, '')
-                finalAddr = `${baseArea}${streetInfo}` || `${lat.toFixed(4)}, ${lng.toFixed(4)}`
-              }
-              finalAddr = finalAddr.replace(/undefined/gi, '').trim()
-              setSelectedAddress(finalAddr)
-              setSearchText(finalAddr)
-            },
-          )
-        })
-      },
-      (err) => {
-        console.warn('⚠️ [GPS] 定位失败:', err.code, err.message)
-        // GPS 失败不降级到 IP 定位（IP 定位不准），提示用户手动选择
-        alert('GPS 定位失败，请在搜索框中输入地址或在地图上点击选择')
-      },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
-    )
+    // 兜底：5 秒后如果都没结果，提示用户手动搜索
+    setTimeout(() => {
+      if (!mountedRef.current || settled) return
+      console.warn('⏰ [LOCATE] 双源定位均超时，提示用户手动搜索')
+      alert('自动定位超时，请在搜索框中输入地址（如"郑州工商学院"）或在地图上点击选择')
+    }, 12000)
   }
 
   // ==================== 关闭（仅清空临时状态 = 解耦零副作用）====================
