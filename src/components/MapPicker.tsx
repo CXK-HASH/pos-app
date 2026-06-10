@@ -361,6 +361,39 @@ export default function MapPicker({ open, onClose, onConfirm, initialAddress, in
     setShowSuggestions(false)
   }
 
+  // ==================== 搜索并定位到目标地址 ====================
+  const searchPoiAndLocate = (keyword: string) => {
+    if (!map || !mountedRef.current) return
+    try {
+      const local = new (window as any).BMap.LocalSearch('', {
+        pageCapacity: 1,
+        onSearchComplete: (results: any) => {
+          if (!mountedRef.current) return
+          if (results.getCurrentNumPois() > 0) {
+            const poi = results.getPoi(0)
+            const pt = poi.point
+            console.log('🎯 [SEARCH] 搜索定位到:', poi.title, pt.lat, pt.lng)
+            map.clearOverlays()
+            map.centerAndZoom(pt, 17)
+            const newMk = new (window as any).BMap.Marker(pt)
+            newMk.enableDragging()
+            map.addOverlay(newMk)
+            setMarker(newMk)
+            setSelectedLat(pt.lat)
+            setSelectedLng(pt.lng)
+            setSelectedAddress(poi.address || poi.title)
+            setSearchText(poi.title)
+          } else {
+            alert(`未找到“${keyword}”，请尝试手动搜索`)
+          }
+        },
+      })
+      local.search(keyword)
+    } catch (err) {
+      console.error('❌ [SEARCH] 搜索异常:', err)
+    }
+  }
+
   // ==================== 当前定位（纯 HTML5 GPS，无需降级）====================
   const handleLocate = () => {
     if (!map || !(window as any).BMap || !mountedRef.current) return
@@ -503,7 +536,7 @@ export default function MapPicker({ open, onClose, onConfirm, initialAddress, in
             <button onClick={handleSearch} className="px-4 py-2 bg-orange-500 text-white text-sm rounded-xl hover:bg-orange-600 transition-all whitespace-nowrap">
               搜索
             </button>
-            <button onClick={handleLocate} className="px-4 py-2 bg-blue-500 text-white text-sm rounded-xl hover:bg-blue-600 transition-all whitespace-nowrap" title="定位当前位置">
+            <button onClick={() => searchPoiAndLocate('郑州工商学院')} className="px-4 py-2 bg-blue-500 text-white text-sm rounded-xl hover:bg-blue-600 transition-all whitespace-nowrap" title="定位到郑州工商学院">
               📍
             </button>
           </div>
