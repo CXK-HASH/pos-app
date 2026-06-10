@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState, useCallback } from 'react'
+import { getLocationWithGuard } from '@/lib/baiduGuard'
 
 declare global {
   interface Window {
@@ -143,10 +144,9 @@ export default function MapPicker({ open, onClose, onConfirm, initialAddress, in
         setSelectedLat(clickedLat)
         setSelectedLng(clickedLng)
 
-        // 2. POI 级三位一体逆地理：省市区 + 路名 + 实体地标
-        const gc = new (window as any).BMap.Geocoder()
-        gc.getLocation(
-          pt,
+        // 2. POI 级三位一体逆地理：省市区 + 路名 + 实体地标（带防抖拦截）
+        getLocationWithGuard(
+          clickedLng, clickedLat,
           (rs: any) => {
             if (!mountedRef.current) return
             const addComp = rs?.addressComponents
@@ -191,11 +191,11 @@ export default function MapPicker({ open, onClose, onConfirm, initialAddress, in
             setSelectedAddress(finalAddr)
             setSearchText(finalAddr)
           },
-          { poiRadius: 150, numPois: 12 }
         )
+        function noop() {}
       })
 
-      // 拖拽结束
+      // 拖拽结束（带防抖）
       let dragTimer: ReturnType<typeof setTimeout>
       mk.addEventListener('dragend', (e: any) => {
         if (!mountedRef.current) return
@@ -205,12 +205,14 @@ export default function MapPicker({ open, onClose, onConfirm, initialAddress, in
         if (dragTimer) clearTimeout(dragTimer)
         dragTimer = setTimeout(() => {
           if (!mountedRef.current) return
-          const gc = new (window as any).BMap.Geocoder()
-          gc.getLocation(pt, (rs: any) => {
-            if (!mountedRef.current) return
-            const addr = rs?.address || `${pt.lat.toFixed(4)},${pt.lng.toFixed(4)}`
-            setSelectedAddress(addr)
-          })
+          getLocationWithGuard(
+            pt.lng, pt.lat,
+            (rs: any) => {
+              if (!mountedRef.current) return
+              const addr = rs?.address || `${pt.lat.toFixed(4)},${pt.lng.toFixed(4)}`
+              setSelectedAddress(addr)
+            }
+          )
         }, 500)
       })
     }, 150)
@@ -378,10 +380,9 @@ export default function MapPicker({ open, onClose, onConfirm, initialAddress, in
             setMarker(newMk)
             setSelectedLat(pt.lat)
             setSelectedLng(pt.lng)
-            // POI 级精确定位：优先提取 surroundingPois[0].title 地标建筑名
-            const gc = new (window as any).BMap.Geocoder()
-            gc.getLocation(
-              pt,
+            // POI 级精确定位：优先提取 surroundingPois[0].title 地标建筑名（带防抖）
+            getLocationWithGuard(
+              pt.lng, pt.lat,
               (rs: any) => {
                 if (!mountedRef.current) return
                 const addComp = rs?.addressComponents
@@ -405,7 +406,6 @@ export default function MapPicker({ open, onClose, onConfirm, initialAddress, in
                 setSelectedAddress(finalAddr)
                 setSearchText(finalAddr)
               },
-              { poiRadius: 100, numPois: 5 }
             )
           } else {
             console.warn('⚠️ [MAP_LOCATION_DEBUG] 高精度定位失败，状态码:', this.getStatus(), '— IP 定位降级')
@@ -418,10 +418,9 @@ export default function MapPicker({ open, onClose, onConfirm, initialAddress, in
               setMarker(newMk)
               setSelectedLat(pt.lat)
               setSelectedLng(pt.lng)
-              // POI 级精确定位（IP降级分支）
-              const gc = new (window as any).BMap.Geocoder()
-              gc.getLocation(
-                pt,
+              // POI 级精确定位（IP降级分支，带防抖）
+              getLocationWithGuard(
+                pt.lng, pt.lat,
                 (rs: any) => {
                   if (!mountedRef.current) return
                   const addComp = rs?.addressComponents
@@ -441,8 +440,7 @@ export default function MapPicker({ open, onClose, onConfirm, initialAddress, in
                   setSelectedAddress(finalAddr)
                   setSearchText(finalAddr)
                 },
-                { poiRadius: 100, numPois: 5 }
-              )
+                )
             }
           }
         },
@@ -509,12 +507,19 @@ export default function MapPicker({ open, onClose, onConfirm, initialAddress, in
                     setSelectedLng(lng)
                     if (typeof window !== 'undefined' && (window as any).BMap) {
                       const pt = new (window as any).BMap.Point(lng, lat)
-                      const gc = new (window as any).BMap.Geocoder()
-                      gc.getLocation(pt, (rs: any) => {
-                        const addr = rs?.address || '我的位置'
-                        setSelectedAddress(addr)
-                        setSearchText(addr)
-                      })
+                      getLocationWithGuard(
+                        lng, lat,
+                        (rs: any) => {
+                          const addr = rs?.address || '我的位置'
+                          setSelectedAddress(addr)
+                          setSearchText(addr)
+                        },
+                        () => {
+                          const addr = `${lat.toFixed(4)}, ${lng.toFixed(4)}`
+                          setSelectedAddress(addr)
+                          setSearchText(addr)
+                        }
+                      )
                       const bm = (window as any).__bm__
                       if (bm) {
                         bm.setCenter(pt, 15)

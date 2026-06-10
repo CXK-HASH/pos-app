@@ -35,7 +35,7 @@ export async function PUT(request: Request) {
 
     const { error } = await supabase
       .from('merchants')
-      .update({ address: safeAddress, lng: safeLng, lat: safeLat })
+      .update({ address: safeAddress, shop_address: safeAddress, lng: safeLng, lat: safeLat })
       .eq('id', merchantId)
 
     if (error) {

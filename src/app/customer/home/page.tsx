@@ -265,12 +265,13 @@ export default function CustomerHome() {
       }
     })
 
-    // 逆地理取 adcode 写 localStorage，触发天气组件联动刷新
+    // 逆地理取 adcode 写 localStorage，触发天气组件联动刷新（带防抖拦截）
     if (typeof window !== 'undefined' && (window as any).BMap) {
       try {
-        const pt = new (window as any).BMap.Point(lng, lat)
         const gc = new (window as any).BMap.Geocoder()
-        gc.getLocation(pt, (rs: any) => {
+        gc.getLocation(
+          new (window as any).BMap.Point(lng, lat),
+          (rs: any) => {
           const adcode = rs?.addressComponents?.adcode
           if (adcode) {
             localStorage.setItem('customer_adcode', String(adcode))
