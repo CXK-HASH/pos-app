@@ -495,50 +495,6 @@ export default function MapPicker({ open, onClose, onConfirm, initialAddress, in
         {/* 搜索栏 + 联想面板 */}
         <div className="p-4 pb-0 relative">
           <div className="flex gap-2">
-            {/* 定位按钮 */}
-            <button
-              onClick={() => {
-                if (!navigator.geolocation) { alert('您的浏览器不支持定位'); return }
-                navigator.geolocation.getCurrentPosition(
-                  (pos) => {
-                    const lat = pos.coords.latitude
-                    const lng = pos.coords.longitude
-                    setSelectedLat(lat)
-                    setSelectedLng(lng)
-                    if (typeof window !== 'undefined' && (window as any).BMap) {
-                      const pt = new (window as any).BMap.Point(lng, lat)
-                      getLocationWithGuard(
-                        lng, lat,
-                        (rs: any) => {
-                          const addr = rs?.address || '我的位置'
-                          setSelectedAddress(addr)
-                          setSearchText(addr)
-                        },
-                        () => {
-                          const addr = `${lat.toFixed(4)}, ${lng.toFixed(4)}`
-                          setSelectedAddress(addr)
-                          setSearchText(addr)
-                        }
-                      )
-                      const bm = (window as any).__bm__
-                      if (bm) {
-                        bm.setCenter(pt, 15)
-                        bm.clearOverlays()
-                        const mk = new (window as any).BMap.Marker(pt)
-                        mk.setAnimation((window as any).BMAP_ANIMATION_BOUNCE)
-                        bm.addOverlay(mk)
-                        setMarker(mk)
-                      }
-                    }
-                  },
-                  () => alert('定位失败，请检查位置权限'),
-                  { enableHighAccuracy: true, timeout: 10000 }
-                )
-              }}
-              className="shrink-0 px-3 py-2 bg-gradient-to-r from-blue-500 to-cyan-500 text-white text-sm font-medium rounded-xl hover:opacity-90 transition-all flex items-center gap-1"
-            >
-              📡 定位
-            </button>
             <div className="flex-1 relative">
               <input
                 ref={inputRef}
