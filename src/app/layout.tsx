@@ -32,7 +32,7 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <head>
-        {/* 强制注入最高权重的 CSS 空间提权 */}
+        {/* Dify 气泡按钮全局 CSS 提权 */}
         <style dangerouslySetInnerHTML={{
           __html: `
             #dify-chatbot-bubble-button {
@@ -54,27 +54,8 @@ export default function RootLayout({
             }
           `
         }} />
-      </head>
-      <body className="min-h-full flex flex-col bg-gray-50">
-        {/* 百度地图 SDK — afterInteractive 异步加载 */}
-        {mapAk ? (
-          <Script
-            src={`https://api.map.baidu.com/api?v=3.0&ak=${mapAk}&callback=onBMapLoaded`}
-            strategy="afterInteractive"
-          />
-        ) : (
-          <Script
-            id="bmap-fallback"
-            strategy="afterInteractive"
-            dangerouslySetInnerHTML={{
-              __html: `console.warn('⚠️ [BMap] NEXT_PUBLIC_BAIDU_MAP_AK 未配置，地图功能不可用');`,
-            }}
-          />
-        )}
-        <Navbar />
-        <main className="flex-1">{children}</main>
 
-        {/* 纯净增量隔离点一：注入全局常驻的 window 基础配置环境 */}
+        {/* Dify 智能体核心配置 — 必须早于 embed.min.js */}
         <Script
           id="dify-independent-config"
           strategy="beforeInteractive"
@@ -89,28 +70,44 @@ export default function RootLayout({
             `
           }}
         />
+      </head>
+      <body className="min-h-full flex flex-col bg-gray-50">
+        {/* 百度地图 SDK — 直接加载 getscript 核心，避免 document.write 清空文档 */}
+        {mapAk ? (
+          <>
+            <Script
+              id="bmap-loader"
+              strategy="beforeInteractive"
+              dangerouslySetInnerHTML={{
+                __html: `
+                  window.BMAP_PROTOCOL = "https";
+                  window.BMap_loadScriptTime = new Date().getTime();
+                `
+              }}
+            />
+            <Script
+              id="bmap-core"
+              src={`https://api.map.baidu.com/getscript?v=3.0&ak=${mapAk}&services=&t=20260511192400`}
+              strategy="beforeInteractive"
+            />
+          </>
+        ) : (
+          <Script
+            id="bmap-fallback"
+            strategy="afterInteractive"
+            dangerouslySetInnerHTML={{
+              __html: `console.warn('⚠️ [BMap] NEXT_PUBLIC_BAIDU_MAP_AK 未配置，地图功能不可用');`,
+            }}
+          />
+        )}
+        <Navbar />
+        <main className="flex-1">{children}</main>
 
-        {/* 纯净增量隔离点二：强制拉回原生的右下角气泡渲染引擎 */}
+        {/* Dify 智能体嵌入引擎包 */}
         <Script
           id="dify-independent-engine"
           src="https://udify.app/embed.min.js"
-          strategy="lazyOnload"
-        />
-
-        {/* onLoad 回调用独立的 script 写，绕过 Next.js Script onLoad 的 SSR 限制 */}
-        <Script
-          id="dify-independent-callback"
-          strategy="lazyOnload"
-          dangerouslySetInnerHTML={{
-            __html: `
-              setTimeout(function() {
-                var btn = document.getElementById('dify-chatbot-bubble-button');
-                if (btn) {
-                  console.log("🤖 [DIFY_BUBBLE_INDEPENDENT] 独立全局气泡已经成功强行接入，右下角安全亮起！");
-                }
-              }, 2000);
-            `
-          }}
+          strategy="afterInteractive"
         />
       </body>
     </html>
