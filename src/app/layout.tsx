@@ -35,18 +35,21 @@ export default function RootLayout({
         <style dangerouslySetInnerHTML={{
           __html: `
             #dify-chatbot-bubble-button {
+              position: fixed !important;
               background-color: #1C64F2 !important;
               z-index: 999999 !important;
               bottom: 6rem !important;
               right: 1.5rem !important;
             }
             #dify-chatbot-bubble-window {
+              position: fixed !important;
               z-index: 999999 !important;
               width: 24rem !important;
               height: 40rem !important;
             }
             @media (max-width: 768px) {
               #dify-chatbot-bubble-window {
+                position: fixed !important;
                 width: calc(100% - 2rem) !important;
                 height: 75vh !important;
                 bottom: 5.5rem !important;
