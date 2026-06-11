@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
-import NavigationMap from '@/components/NavigationMap'
 import MapPicker from '@/components/MapPicker'
 import { getDistance, formatDistance } from '@/lib/distance'
 import { getLocationWithGuard } from '@/lib/baiduGuard'
@@ -55,9 +54,9 @@ export default function DriverDashboard() {
   // 地址弹窗
   const [showMap, setShowMap] = useState(false)
 
-  // 导航状态
-  const [navOrder, setNavOrder] = useState<Order | null>(null)
-  const [showNav, setShowNav] = useState(false)
+  // 导航弹窗状态机
+  const [isNavModalOpen, setIsNavModalOpen] = useState(false)
+  const [navTargetName, setNavTargetName] = useState('')
 
   // 路由守卫 + 百度地图定位
   useEffect(() => {
@@ -179,30 +178,48 @@ export default function DriverDashboard() {
     setActionLoading(null)
   }
 
-  /** 百度地图外跳导航：取餐/送餐双段 */
-  const handleNavigate = (order: Order, type: 'pickup' | 'deliver') => {
-    if (!driverLat || !driverLng) {
-      alert('骑手位置未获取，请等待定位完成')
+  /** 内嵌百度轻量级骑行路径规划：彻底废除外部标签页跳转 */
+  const startInlineNavigation = (
+    riderLat: number,
+    riderLng: number,
+    destLat: number,
+    destLng: number,
+    targetName: string
+  ) => {
+    if (!riderLat || !riderLng || !destLat || !destLng) {
+      alert('❌ 坐标捕获中，请稍后重试...')
       return
     }
 
-    if (type === 'pickup') {
-      if (!order.merchant_lat || !order.merchant_lng) {
-        alert('商家位置信息不全')
-        return
-      }
-      const url = `https://api.map.baidu.com/direction?origin=${driverLat},${driverLng}&destination=${order.merchant_lat},${order.merchant_lng}&mode=riding&region=全国&output=html&src=webapp.delivery.posapp`
-      console.log('🚀 [BAIDU_MAP_NAV] 导航取餐:', url)
-      window.open(url, '_blank')
-    } else {
-      if (!order.consumer_lat || !order.consumer_lng) {
-        alert('送餐位置信息不全')
-        return
-      }
-      const url = `https://api.map.baidu.com/direction?origin=${driverLat},${driverLng}&destination=${order.consumer_lat},${order.consumer_lng}&mode=riding&region=全国&output=html&src=webapp.delivery.posapp`
-      console.log('🚀 [BAIDU_MAP_NAV] 导航送餐:', url)
-      window.open(url, '_blank')
-    }
+    // 1. 打开内嵌弹窗面板，为 DOM 渲染腾出容器
+    setNavTargetName(targetName)
+    setIsNavModalOpen(true)
+
+    // 2. 延迟 100 毫秒等待 Modal DOM 完全树立，随后初始化百度轻量地图
+    setTimeout(() => {
+      const el = document.getElementById('inline-nav-map')
+      if (!el) return
+
+      const map = new (window as any).BMap.Map(el)
+      const startPoint = new (window as any).BMap.Point(riderLng, riderLat)
+      const endPoint = new (window as any).BMap.Point(destLng, destLat)
+
+      map.centerAndZoom(startPoint, 15)
+      map.enableScrollWheelZoom(true) // 允许骑手两指放大缩小地图
+
+      console.log('🚴 [INLINE_ROUTE] 正在调度百度轻量级骑行路径规划网关...')
+
+      // 3. 调用百度官方轻量级骑行路由渲染器
+      const riding = new (window as any).BMap.RidingRoute(map, {
+        renderOptions: {
+          map: map,
+          autoViewport: true, // 自动缩放地图视野，确保起点和终点同时完美露出来
+        }
+      })
+
+      // 一键发号规划指令，百度 SDK 会自动在 inline-nav-map 容器里画出幽蓝色配送实线
+      riding.search(startPoint, endPoint)
+    }, 150)
   }
 
   if (!user) {
@@ -321,10 +338,10 @@ export default function DriverDashboard() {
         {/* 导航按钮 */}
         {mAddr && order.merchant_lat && order.merchant_lng && (
           <button
-            onClick={() => handleNavigate(order, 'pickup')}
+            onClick={() => startInlineNavigation(driverLat, driverLng, order.merchant_lat!, order.merchant_lng!, order.merchant_address || '商家')}
             className="w-full py-2.5 bg-gradient-to-r from-blue-600 to-cyan-600 text-white font-semibold rounded-xl hover:opacity-90 transition-all flex items-center justify-center gap-2 mb-2"
           >
-            🗺️ 百度导航取餐
+            🗺️ 内嵌导航取餐
           </button>
         )}
 
@@ -360,10 +377,10 @@ export default function DriverDashboard() {
             {/* 送餐导航 */}
             {order.consumer_lat && order.consumer_lng && (
               <button
-                onClick={() => handleNavigate(order, 'deliver')}
+                onClick={() => startInlineNavigation(driverLat, driverLng, order.consumer_lat!, order.consumer_lng!, order.consumer_address || '顾客')}
                 className="w-full py-2.5 bg-gradient-to-r from-orange-500 to-red-500 text-white font-semibold rounded-xl hover:opacity-90 transition-all flex items-center justify-center gap-2 mb-2"
               >
-                🚴 百度导航送餐
+                🚴 内嵌导航送餐
               </button>
             )}
             <button
@@ -482,18 +499,38 @@ export default function DriverDashboard() {
         </div>
       )}
 
-      {/* 导航地图弹窗 */}
-      {navOrder && showNav && (
-        <NavigationMap
-          open={showNav}
-          onClose={() => setShowNav(false)}
-          merchantName={navOrder.merchant_name || '商家'}
-          fromLat={navOrder.merchant_lat || 23.1291}
-          fromLng={navOrder.merchant_lng || 113.2644}
-          toAddress={navOrder.consumer_address || '送达地址'}
-          toLat={navOrder.consumer_lat || 23.136}
-          toLng={navOrder.consumer_lng || 113.27}
-        />
+      {/* 内嵌导航弹窗 — 彻底替代外部标签页跳转 */}
+      {isNavModalOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[999999] flex flex-col justify-end sm:justify-center p-0 sm:p-4 animate-fadeIn">
+          <div className="bg-white w-full max-w-lg mx-auto rounded-t-2xl sm:rounded-2xl overflow-hidden shadow-2xl flex flex-col h-[75vh]">
+            {/* 弹窗头部标题栏 */}
+            <div className="p-4 bg-zinc-900 text-white flex justify-between items-center">
+              <div className="min-w-0">
+                <div className="text-xs text-zinc-400">正在为您规划轻量配送路线</div>
+                <div className="text-sm font-bold truncate max-w-[250px]">至：{navTargetName}</div>
+              </div>
+              <button
+                onClick={() => setIsNavModalOpen(false)}
+                className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center text-zinc-400 font-bold active:scale-95 transition-all shrink-0"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* 百度地图原生内嵌渲染画布 */}
+            <div id="inline-nav-map" className="w-full flex-1 bg-zinc-100 relative"></div>
+
+            {/* 底部一键安全关闭 */}
+            <div className="p-4 bg-zinc-50 border-t border-zinc-100">
+              <button
+                onClick={() => setIsNavModalOpen(false)}
+                className="w-full py-3 bg-zinc-900 text-white font-bold rounded-xl active:scale-95 transition-all text-center text-sm shadow-md"
+              >
+                我已看清路线，返回配送面板
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
