@@ -543,6 +543,90 @@ export default function MapPicker({ open, onClose, onConfirm, initialAddress, in
     }, 12000)
   }
 
+  // ==================== 蓝色定位按钮专属强刷：跳过一切缓存/防抖/并发控制，硬件级重新捕获 ====================
+  const handleForceLocationRefresh = () => {
+    if (!map || !(window as any).BMap || !mountedRef.current) return
+    console.log('📡 [FORCE_LOCATION] 用户触发蓝色定位按钮，开始执行硬件级强刷，跳过缓存拦截...')
+
+    // 1. 物理清除当前可能引发死锁的旧地理位置缓存痕迹
+    try {
+      const keys = Object.keys(localStorage)
+      keys.forEach(key => {
+        if (key.startsWith('geo_cache_')) {
+          localStorage.removeItem(key)
+        }
+      })
+      console.log('🧹 [FORCE_LOCATION] 已清除所有 geo_cache_ 缓存')
+    } catch {}
+
+    // 2. 调度百度原生高精度定位模块
+    try {
+      const geolocation = new (window as any).BMap.Geolocation()
+      geolocation.getCurrentPosition(
+        function (this: any, r: any) {
+          if (!mountedRef.current) return
+          // 检查是否由于网络原因或者拒绝权限导致失败
+          if (this.getStatus() !== (window as any).BMAP_STATUS_SUCCESS) {
+            console.error('❌ 百度 Geolocation 核心服务调取失败，状态码:', this.getStatus())
+            alert('无法获取当前硬件定位，请检查浏览器/手机位置权限是否开启')
+            return
+          }
+
+          // 捕获最新动态坐标，彻底粉碎硬编码默认值
+          const freshLng = r.point.lng
+          const freshLat = r.point.lat
+          console.log('🎯 [GPS_SUCCESS] 捕获当前最新未污染坐标: lng=' + freshLng + ', lat=' + freshLat)
+
+          // 3. 强制出网反查地标字面（完全绕过 getLocationWithGuard，直接调用百度 Geocoder）
+          const geoc = new (window as any).BMap.Geocoder()
+          geoc.getLocation(
+            new (window as any).BMap.Point(freshLng, freshLat),
+            function (rs: any) {
+              if (!mountedRef.current) return
+              if (!rs) {
+                setSelectedAddress(freshLat.toFixed(4) + ', ' + freshLng.toFixed(4))
+                setSearchText(freshLat.toFixed(4) + ', ' + freshLng.toFixed(4))
+                return
+              }
+
+              const addComp = rs.addressComponents
+              // 提取精准的三位一体路名（市区 + 街道 + 地标名称）
+              const baseArea = [addComp.province, addComp.city, addComp.district].filter(Boolean).join('')
+              const streetPart = [addComp.street, addComp.streetNumber].filter(Boolean).join('')
+              const primaryPoi = rs.surroundingPois?.[0]
+              const poiTitle = primaryPoi?.title || ''
+              const cleanAddressText = baseArea + (poiTitle || streetPart)
+              const finalText = cleanAddressText.replace(/undefined/gi, '').trim() || (freshLat.toFixed(4) + ', ' + freshLng.toFixed(4))
+
+              // 4. 同步咬合状态机，强行扭转输入框与地图视角
+              setSearchText(finalText)
+              setSelectedAddress(finalText)
+              setSelectedLat(freshLat)
+              setSelectedLng(freshLng)
+
+              if (map) {
+                const newPoint = new (window as any).BMap.Point(freshLng, freshLat)
+                map.centerAndZoom(newPoint, 16)
+                map.clearOverlays()
+                const mk = new (window as any).BMap.Marker(newPoint)
+                mk.enableDragging()
+                map.addOverlay(mk)
+                setMarker(mk)
+              }
+
+              console.log('✅ [FORCE_LOCATION_COMPLETE] 蓝色按钮定位强刷流程闭环，死锁彻底解除！地址:', finalText)
+            },
+            { poiRadius: 100, numPois: 5 }
+          )
+        },
+        { enableHighAccuracy: true, timeout: 5000 }
+      )
+    } catch (err) {
+      console.error('❌ [FORCE_LOCATION] 定位异常:', err)
+      alert('定位异常，请检查位置权限后重试')
+    }
+  }
+
   // ==================== 关闭（仅清空临时状态 = 解耦零副作用）====================
   const handleClose = () => {
     setSuggestions([])
@@ -617,7 +701,7 @@ export default function MapPicker({ open, onClose, onConfirm, initialAddress, in
             <button onClick={handleSearch} className="px-4 py-2 bg-orange-500 text-white text-sm rounded-xl hover:bg-orange-600 transition-all whitespace-nowrap">
               搜索
             </button>
-            <button onClick={handleLocate} className="px-4 py-2 bg-blue-500 text-white text-sm rounded-xl hover:bg-blue-600 transition-all whitespace-nowrap" title="定位当前位置">
+            <button onClick={handleForceLocationRefresh} className="px-4 py-2 bg-blue-500 text-white text-sm rounded-xl hover:bg-blue-600 transition-all whitespace-nowrap" title="定位当前位置">
               📍
             </button>
           </div>
