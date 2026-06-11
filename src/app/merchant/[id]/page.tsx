@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@supabase/supabase-js'
+import MapPicker from '@/components/MapPicker'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -49,6 +50,11 @@ export default function MerchantPage() {
   const [aiPrompt, setAiPrompt] = useState('')
   const [aiLoading, setAiLoading] = useState(false)
   const [aiResult, setAiResult] = useState<string | null>(null)
+
+  // 送餐地址拦截状态（单据级独立锁定）
+  const [isLocationModalOpen, setIsLocationModalOpen] = useState(false)
+  const [selectedAddress, setSelectedAddress] = useState<string>('')
+  const [customerCoords, setCustomerCoords] = useState<{lat: number; lng: number} | null>(null)
 
   // 获取商家信息和菜品分类列表
   useEffect(() => {
@@ -110,6 +116,29 @@ export default function MerchantPage() {
       return
     }
 
+    // ⚠️ 强制拦截：未选送餐地址不可下单
+    // 优先使用弹窗选择的地址（单据级独立锁定），其次回退 localStorage
+    let finalAddress = selectedAddress
+    let finalCoords = customerCoords
+
+    // 尝试从 localStorage 回退
+    if (!finalAddress) {
+      const addr = typeof window !== 'undefined' ? localStorage.getItem('customer_address') || '' : ''
+      const lat = typeof window !== 'undefined' ? localStorage.getItem('customer_lat') : null
+      const lng = typeof window !== 'undefined' ? localStorage.getItem('customer_lng') : null
+      if (addr && lat && lng) {
+        finalAddress = addr
+        finalCoords = { lat: Number(lat), lng: Number(lng) }
+      }
+    }
+
+    if (!finalCoords || !finalAddress) {
+      console.log('⚠️ [CHECKOUT_BLOCK] 未选择送餐地址，强制唤起百度地图选择弹窗...')
+      alert('请先选择您的送餐位置，以便骑手精准配送！')
+      setIsLocationModalOpen(true)
+      return
+    }
+
     setIsSubmitting(true)
     try {
       // 强类型转换：dishId → number, quantity → number, price → number
@@ -127,10 +156,10 @@ export default function MerchantPage() {
         }
       }).filter(Boolean)
 
-      // 从 localStorage 读取消费者位置
-      const consumerAddress = typeof window !== 'undefined' ? localStorage.getItem('customer_address') || '' : ''
-      const consumerLat = typeof window !== 'undefined' ? localStorage.getItem('customer_lat') : null
-      const consumerLng = typeof window !== 'undefined' ? localStorage.getItem('customer_lng') : null
+      // 从单据级 state 读取消费者位置（弹窗选择的独立坐标）
+      const consumerAddress = finalAddress
+      const consumerLat = finalCoords ? finalCoords.lat : null
+      const consumerLng = finalCoords ? finalCoords.lng : null
 
       const payload = {
         merchantId: Number(merchantId),
@@ -393,6 +422,25 @@ export default function MerchantPage() {
           </div>
         </div>
       )}
+
+      {/* 送餐地址选择弹窗 — 单据级独立锁定 */}
+      <MapPicker
+        open={isLocationModalOpen}
+        onClose={() => setIsLocationModalOpen(false)}
+        onConfirm={(addr: string, lat: number, lng: number) => {
+          // 锁定到当前单据的 state
+          setSelectedAddress(addr)
+          setCustomerCoords({ lat, lng })
+          setIsLocationModalOpen(false)
+          // 同步写入 localStorage 作为向后兼容
+          localStorage.setItem('customer_address', addr)
+          localStorage.setItem('customer_lat', String(lat))
+          localStorage.setItem('customer_lng', String(lng))
+          // 关闭弹窗后自动继续提交
+          // setTimeout 确保 state 更新后再调用 handleCheckout
+          setTimeout(() => handleCheckout(), 0)
+        }}
+      />
     </div>
   )
 }
