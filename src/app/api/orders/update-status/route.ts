@@ -21,7 +21,7 @@ const STATE_MACHINE: Record<string, string[]> = {
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    const { orderId, status: targetStatus, meal_prepared, driver_arrived } = body
+    const { orderId, status: targetStatus, meal_prepared, driver_arrived, consumer_address, consumer_lat, consumer_lng } = body
 
     if (!orderId) {
       return NextResponse.json({ error: 'orderId 不能为空' }, { status: 400 })
@@ -55,7 +55,7 @@ export async function POST(request: Request) {
     // 1. 先查询当前订单状态
     const { data: currentOrder, error: queryError } = await supabase
       .from('orders')
-      .select('id, status, merchant_id, driver_id, meal_prepared, driver_arrived')
+      .select('id, status, merchant_id, driver_id, meal_prepared, driver_arrived, consumer_lat, consumer_lng, consumer_address')
       .eq('id', Number(orderId))
       .single()
 
@@ -116,6 +116,38 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: error.message }, { status: 500 })
       }
       console.log(`[STATE_MACHINE] 骑手#${orderId} 已到店取货`)
+      return NextResponse.json({ success: true, order: data[0] })
+    }
+
+    // === 消费者地址锁定（每单一次，写入后禁止覆盖） ===
+    if (consumer_address || consumer_lat || consumer_lng) {
+      if (userRole !== 'consumer') {
+        return NextResponse.json({ error: '只有消费者可以设置配送地址' }, { status: 403 })
+      }
+
+      // 检查是否已锁定（不可覆盖）
+      if (currentOrder.consumer_lat && currentOrder.consumer_lng) {
+        return NextResponse.json({ error: '该订单的配送地址已锁定，不可修改' }, { status: 400 })
+      }
+
+      if (!consumer_address || !consumer_lat || !consumer_lng) {
+        return NextResponse.json({ error: '地址名称、经纬度均不能为空' }, { status: 400 })
+      }
+
+      const { data, error } = await supabase
+        .from('orders')
+        .update({
+          consumer_address,
+          consumer_lat: Number(consumer_lat),
+          consumer_lng: Number(consumer_lng),
+        })
+        .eq('id', Number(orderId))
+        .select()
+
+      if (error) {
+        return NextResponse.json({ error: error.message }, { status: 500 })
+      }
+      console.log(`[LOCATION_LOCK] 订单#${orderId} 配送地址已锁定:`, consumer_address, consumer_lat, consumer_lng)
       return NextResponse.json({ success: true, order: data[0] })
     }
 

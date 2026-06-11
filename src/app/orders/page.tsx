@@ -4,6 +4,63 @@ import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
+import MapPicker from '@/components/MapPicker'
+
+/**
+ * 每个订单独立的地址选择器
+ * 一次选择后锁定，不再弹出
+ */
+function AddressSelector({ orderId, onAddressSet }: { orderId: number; onAddressSet: () => void }) {
+  const [open, setOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
+
+  const handleConfirm = async (addr: string, lat: number, lng: number) => {
+    setSaving(true)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) return
+
+      const res = await fetch('/api/orders/update-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+        body: JSON.stringify({
+          orderId,
+          consumer_address: addr,
+          consumer_lat: lat,
+          consumer_lng: lng,
+        }),
+      })
+      const data = await res.json()
+      if (data.success) {
+        setOpen(false)
+        onAddressSet()
+      } else {
+        alert(data.error || '保存地址失败')
+      }
+    } catch {
+      alert('网络异常')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <>
+      <button
+        onClick={() => setOpen(true)}
+        disabled={saving}
+        className="w-full py-2.5 bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-semibold rounded-xl hover:opacity-90 transition-all disabled:opacity-50 active:scale-[0.98]"
+      >
+        {saving ? '保存中...' : '📍 选择配送地址'}
+      </button>
+      <MapPicker
+        open={open}
+        onClose={() => setOpen(false)}
+        onConfirm={handleConfirm}
+      />
+    </>
+  )
+}
 
 type CartItem = { name: string; price: number; quantity: number }
 
@@ -18,6 +75,9 @@ type Order = {
   meal_prepared: boolean
   driver_arrived: boolean
   created_at: string
+  consumer_address: string | null
+  consumer_lat: number | null
+  consumer_lng: number | null
 }
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
@@ -181,6 +241,21 @@ export default function OrdersPage() {
                       </span>
                     </div>
                   </div>
+
+                  {/* ========== 消费者操作区 ========== */}
+                  {role === 'consumer' && (
+                    <>
+                      {/* 选择配送地址：仅当未设置地址时展示，每个订单最多一次 */}
+                      {!order.consumer_lat && !order.consumer_lng && (
+                        <AddressSelector orderId={order.id} onAddressSet={fetchOrders} />
+                      )}
+                      {order.consumer_address && (
+                        <div className="text-center text-xs text-gray-500 py-2 bg-gray-50 rounded-xl">
+                          📍 配送至: {order.consumer_address}
+                        </div>
+                      )}
+                    </>
+                  )}
 
                   {/* ========== 双线程操作区 ========== */}
 
