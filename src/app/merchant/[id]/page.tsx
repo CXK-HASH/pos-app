@@ -427,7 +427,7 @@ export default function MerchantPage() {
       <MapPicker
         open={isLocationModalOpen}
         onClose={() => setIsLocationModalOpen(false)}
-        onConfirm={(addr: string, lat: number, lng: number) => {
+        onConfirm={async (addr: string, lat: number, lng: number) => {
           // 锁定到当前单据的 state
           setSelectedAddress(addr)
           setCustomerCoords({ lat, lng })
@@ -436,9 +436,48 @@ export default function MerchantPage() {
           localStorage.setItem('customer_address', addr)
           localStorage.setItem('customer_lat', String(lat))
           localStorage.setItem('customer_lng', String(lng))
-          // 关闭弹窗后自动继续提交
-          // setTimeout 确保 state 更新后再调用 handleCheckout
-          setTimeout(() => handleCheckout(), 0)
+
+          // 直接提交，不依赖 handleCheckout 的闭包捕获
+          const { data: { session } } = await supabase.auth.getSession()
+          if (!session) { router.push('/'); return }
+
+          setIsSubmitting(true)
+          try {
+            const cartItems = Object.entries(cart).map(([dishId, qty]) => {
+              const dish = dishes.find(d => d.id === Number(dishId))
+              if (!dish) return null
+              return { dish_id: Number(dish.id), name: dish.name, price: Number(dish.price), quantity: Number(qty) }
+            }).filter(Boolean)
+
+            const payload = {
+              merchantId: Number(merchantId),
+              cart: cartItems,
+              totalPrice: cartItems.reduce((sum: number, item: any) => sum + item.price * item.quantity, 0),
+              consumerLat: lat,
+              consumerLng: lng,
+              consumerAddress: addr,
+            }
+
+            const res = await fetch('/api/checkout', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+              body: JSON.stringify(payload),
+            })
+
+            const data = await res.json()
+            if (data.success) {
+              setCart({})
+              setShowCartMobile(false)
+              router.push('/orders')
+            } else {
+              alert(data.error || '下单失败')
+            }
+          } catch (err) {
+            console.error('[PROD_DEBUG] 下单异常:', err)
+            alert('网络异常')
+          } finally {
+            setIsSubmitting(false)
+          }
         }}
       />
     </div>
